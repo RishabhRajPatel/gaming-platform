@@ -28,8 +28,27 @@ export default function App() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-slate-400">
-        {failed ? "Could not reach the game server. Please retry." : "Loading…"}
+      <div
+        className="min-h-screen flex flex-col items-center justify-center gap-5"
+        style={{ background: "radial-gradient(circle at 50% 40%, #143a29 0%, #0f2a1e 45%, #0b1f17 100%)" }}
+      >
+        <div
+          className="w-24 h-24 rounded-3xl border-4 border-gold-500 flex items-center justify-center shadow-glow"
+          style={{ background: "linear-gradient(160deg, #1f2733, #0a0c10)" }}
+        >
+          <span className="text-5xl text-gold-500" style={{ textShadow: "0 4px 12px rgba(0,0,0,0.6)" }}>
+            ♠
+          </span>
+        </div>
+        <div className="font-display text-2xl font-bold text-gold-500 tracking-wide">Rummy</div>
+        {failed ? (
+          <p className="text-red-400 text-sm">Could not reach the game server. Please retry.</p>
+        ) : (
+          <div className="flex items-center gap-2 text-slate-400 text-sm">
+            <span className="w-2 h-2 rounded-full bg-gold-500 animate-pulse" />
+            <span>Loading…</span>
+          </div>
+        )}
       </div>
     );
   }
