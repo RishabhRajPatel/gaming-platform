@@ -15,6 +15,17 @@ import { useAuth } from "../store/auth";
 const FIRST_DROP_POINTS = 20;
 const MIDDLE_DROP_POINTS = 40;
 
+/** A random card code purely for the decorative toss flip — never a real card from
+ * anyone's hand or the deck, just flavor while the toast names the actual (server-
+ * decided) opening player. */
+function randomCardCode(): string {
+  const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+  const suits = ["S", "H", "D", "C"];
+  const rank = ranks[Math.floor(Math.random() * ranks.length)];
+  const suit = suits[Math.floor(Math.random() * suits.length)];
+  return `${rank}${suit}0`;
+}
+
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-green-900/60 text-green-300 border-green-700",
   dropped: "bg-slate-800 text-slate-400 border-slate-600",
@@ -158,6 +169,7 @@ export default function GameTable() {
   const [playAgainBusy, setPlayAgainBusy] = useState(false);
   const [tossMessage, setTossMessage] = useState<string | null>(null);
   const [tossFading, setTossFading] = useState(false);
+  const [tossCards, setTossCards] = useState<[string, string] | null>(null);
   const tossShownForDeal = useRef<number | null>(null);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -213,23 +225,31 @@ export default function GameTable() {
 
   // "X won the toss and will play first" — purely a presentation of who the server
   // already picked as the opening player (see start_deal's dealer-relative seat pick);
-  // the client never chooses this, it just narrates it once per fresh deal.
+  // the client never chooses this, it just narrates it once per fresh deal. Waits for
+  // the "game will start in 5…" countdown to finish first, so the two overlays never
+  // show at the same time. The two flipped cards are decorative flavor only —
+  // randomised client side each time, not read from anyone's real hand.
   useEffect(() => {
     if (!state || state.phase !== "await_draw") return;
+    if (startCountdown !== null) return;
     if (tossShownForDeal.current === state.deal_number) return;
     tossShownForDeal.current = state.deal_number;
     const firstPlayer = state.players.find((p) => p.id === state.turn);
     if (!firstPlayer) return;
     setTossMessage(`${firstPlayer.name} won the toss and will play first.`);
     setTossFading(false);
+    setTossCards([randomCardCode(), randomCardCode()]);
     const fadeTimer = setTimeout(() => setTossFading(true), 1700);
-    const clearTimer = setTimeout(() => setTossMessage(null), 2000);
+    const clearTimer = setTimeout(() => {
+      setTossMessage(null);
+      setTossCards(null);
+    }, 2000);
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(clearTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.phase, state?.deal_number, state?.turn]);
+  }, [state?.phase, state?.deal_number, state?.turn, startCountdown]);
 
   // Brief "dealing…" countdown after Start deal is pressed — cosmetic only, the
   // actual deal already happened server-side by the time this finishes.
@@ -704,11 +724,13 @@ export default function GameTable() {
           )}
 
           {tossMessage && (
-            <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-              <p
-                className={`px-6 py-3 rounded-full text-sm font-medium text-center transition-opacity duration-500 ${
-                  tossFading ? "opacity-0" : "opacity-100"
-                }`}
+            <div
+              className={`absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-opacity duration-500 ${
+                tossFading ? "opacity-0" : "opacity-100"
+              }`}
+            >
+              <div
+                className="flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-medium text-center"
                 style={{
                   background: "rgba(0, 42, 31, 0.92)",
                   border: "1px solid rgba(30, 210, 145, 0.25)",
@@ -716,8 +738,10 @@ export default function GameTable() {
                   boxShadow: "0 4px 15px rgba(0,0,0,0.35)",
                 }}
               >
-                {tossMessage}
-              </p>
+                {tossCards && <PlayingCard code={tossCards[0]} small />}
+                <span>{tossMessage}</span>
+                {tossCards && <PlayingCard code={tossCards[1]} small />}
+              </div>
             </div>
           )}
 

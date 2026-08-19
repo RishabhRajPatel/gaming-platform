@@ -265,6 +265,8 @@ export default function Lobby() {
               {tiers.map((tier) => {
                 const online = getOnlinePlayers(tier);
                 const busy = joiningTierId === tier.id && searchStatus === "searching";
+                const minEntryPaise = tier.pointValue == null ? 0 : tier.pointValue * 80 * 100;
+                const canAfford = mode === "free" || (wallet?.real_paise ?? 0) >= minEntryPaise;
                 return (
                   <div
                     key={tier.id}
@@ -282,13 +284,22 @@ export default function Lobby() {
                     <span className="lobby-online-icon flex items-center gap-1 font-semibold">
                       <Users size={16} /> {online}
                     </span>
-                    <button
-                      className="lobby-play-btn rounded-full justify-self-end px-4 py-1.5 text-sm"
-                      disabled={busy}
-                      onClick={() => joinTier(tier)}
-                    >
-                      {busy ? "Joining…" : "Play Now"}
-                    </button>
+                    {canAfford ? (
+                      <button
+                        className="lobby-play-btn rounded-full justify-self-end px-4 py-1.5 text-sm"
+                        disabled={busy}
+                        onClick={() => joinTier(tier)}
+                      >
+                        {busy ? "Joining…" : "Play Now"}
+                      </button>
+                    ) : (
+                      <button
+                        className="lobby-btn-add rounded-full justify-self-end px-4 py-1.5 text-sm"
+                        onClick={() => navigate("/wallet")}
+                      >
+                        Add Cash
+                      </button>
+                    )}
                   </div>
                 );
               })}
