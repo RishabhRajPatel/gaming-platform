@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, Users, MessageCircle, Smile, Settings, Flag,
@@ -155,6 +155,9 @@ export default function GameTable() {
   const [startCountdown, setStartCountdown] = useState<number | null>(null);
   const [resultDismissed, setResultDismissed] = useState(false);
   const [playAgainBusy, setPlayAgainBusy] = useState(false);
+  const [tossMessage, setTossMessage] = useState<string | null>(null);
+  const [tossFading, setTossFading] = useState(false);
+  const tossShownForDeal = useRef<number | null>(null);
 
   // Real device height, not just Tailwind's `short:` CSS breakpoint — cards need an
   // actually smaller layout box on landscape phones (~390px tall), not just a visual
@@ -204,6 +207,26 @@ export default function GameTable() {
     }, 1000);
     return () => clearInterval(id);
   }, [state, table?.turn_seconds]);
+
+  // "X won the toss and will play first" — purely a presentation of who the server
+  // already picked as the opening player (see start_deal's dealer-relative seat pick);
+  // the client never chooses this, it just narrates it once per fresh deal.
+  useEffect(() => {
+    if (!state || state.phase !== "await_draw") return;
+    if (tossShownForDeal.current === state.deal_number) return;
+    tossShownForDeal.current = state.deal_number;
+    const firstPlayer = state.players.find((p) => p.id === state.turn);
+    if (!firstPlayer) return;
+    setTossMessage(`${firstPlayer.name} won the toss and will play first.`);
+    setTossFading(false);
+    const fadeTimer = setTimeout(() => setTossFading(true), 2200);
+    const clearTimer = setTimeout(() => setTossMessage(null), 2700);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(clearTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.phase, state?.deal_number, state?.turn]);
 
   // Brief "dealing…" countdown after Start deal is pressed — cosmetic only, the
   // actual deal already happened server-side by the time this finishes.
@@ -385,7 +408,10 @@ export default function GameTable() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="relative flex items-center justify-between px-4 py-2.5 short:py-0.5 gap-3 bg-ink-900/80 backdrop-blur shadow-lg z-10">
+      <header
+        className="relative flex items-center justify-between px-4 py-2.5 short:py-0.5 gap-3 backdrop-blur shadow-lg z-10"
+        style={{ background: "rgba(9, 11, 24, 0.92)" }}
+      >
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-gold-500/60 to-transparent" />
         <div className="flex items-center gap-3">
           <button className="btn-ghost px-2 py-1 flex items-center gap-1.5" onClick={() => navigate("/lobby")}>
@@ -396,19 +422,22 @@ export default function GameTable() {
             🃏 Deals Rummy
           </span>
         </div>
-        <div className="flex-1 flex justify-center items-center gap-3 text-xs text-slate-200 card-surface px-4 py-1.5 font-medium max-w-md">
+        <div
+          className="flex-1 flex justify-center items-center gap-3 text-xs px-4 py-1.5 font-medium max-w-md rounded-xl"
+          style={{ background: "rgba(10, 8, 25, 0.85)", color: "#F4E6C1" }}
+        >
           {table && (
             <span className="flex items-center gap-1.5">
-              <Users size={13} className="text-purple-400" />
-              {table.max_players} Players
+              <Users size={13} style={{ color: "#49D78C" }} />
+              Select Players: {table.max_players}
             </span>
           )}
-          {table && <span className="text-gold-400">•</span>}
+          {table && <span style={{ color: "#FFE02B" }}>•</span>}
           {table && <span>{modeName}</span>}
           {pointValue != null && (
             <>
-              <span className="text-gold-400">•</span>
-              <span className="text-gold-400">₹{pointValue.toFixed(1)} / point</span>
+              <span style={{ color: "#FFE02B" }}>•</span>
+              <span style={{ color: "#FFE02B" }}>Point Value: {pointValue.toFixed(1)}</span>
             </>
           )}
         </div>
@@ -442,17 +471,19 @@ export default function GameTable() {
       {/* Table felt */}
       <main
         className="flex-1 flex items-center justify-center p-4 sm:p-8 short:p-1"
-        style={{ background: "radial-gradient(ellipse at 50% 30%, #0f1a14 0%, #0a0c10 70%)" }}
+        style={{
+          background:
+            "radial-gradient(circle at 50% 20%, #24264A 0%, #17182F 55%, #090B18 100%)",
+        }}
       >
         <div
-          className="relative w-full max-w-4xl short:max-w-[210px] aspect-[2/1] rounded-[50%] short:rounded-3xl border-[10px] short:border-4 flex flex-col items-center justify-evenly short:gap-0.5 px-8 sm:px-20 short:px-2 py-6 short:py-0.5"
+          className="relative w-full max-w-4xl short:max-w-[210px] aspect-[2/1] rounded-[50%] short:rounded-3xl border-[8px] short:border-4 flex flex-col items-center justify-evenly short:gap-0.5 px-8 sm:px-20 short:px-2 py-6 short:py-0.5"
           style={{
-            borderColor: "#6b4423",
-            borderImage: "linear-gradient(160deg, #7a4f28, #4a2e14, #7a4f28) 1",
+            borderColor: "#11152A",
             background:
-              "radial-gradient(ellipse at 50% 40%, #1a4530 0%, #123324 45%, #0c2419 75%, #081910 100%)",
+              "radial-gradient(ellipse at center, #20C98B 0%, #0DAA7B 45%, #007052 100%)",
             boxShadow:
-              "0 25px 60px -10px rgba(0,0,0,0.7), inset 0 0 80px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.04)",
+              "0 0 0 4px #242743, 0 0 0 10px #0B1020, 0 12px 35px rgba(0,0,0,0.65), inset 0 0 80px rgba(0,0,0,0.35)",
           }}
         >
           {/* Faint felt watermark */}
@@ -625,11 +656,37 @@ export default function GameTable() {
           )}
 
           {startCountdown !== null && (
-            <div className="absolute inset-0 rounded-[50%] bg-black/70 flex items-center justify-center z-20">
-              <p className="text-slate-100 text-lg font-display">
+            <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+              <p
+                className="px-6 py-3 rounded-full text-sm font-medium"
+                style={{
+                  background: "rgba(0, 42, 31, 0.92)",
+                  border: "1px solid rgba(30, 210, 145, 0.25)",
+                  color: "#E9F7EE",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.35)",
+                }}
+              >
                 {startCountdown > 0
                   ? `The game will start in ${startCountdown} second${startCountdown === 1 ? "" : "s"}…`
                   : "Dealing…"}
+              </p>
+            </div>
+          )}
+
+          {tossMessage && (
+            <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+              <p
+                className={`px-6 py-3 rounded-full text-sm font-medium text-center transition-opacity duration-500 ${
+                  tossFading ? "opacity-0" : "opacity-100"
+                }`}
+                style={{
+                  background: "rgba(0, 42, 31, 0.92)",
+                  border: "1px solid rgba(30, 210, 145, 0.25)",
+                  color: "#F5F5E8",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.35)",
+                }}
+              >
+                {tossMessage}
               </p>
             </div>
           )}

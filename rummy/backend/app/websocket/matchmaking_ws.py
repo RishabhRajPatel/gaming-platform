@@ -42,7 +42,7 @@ from app.schemas.game import TableCreate
 
 router = APIRouter()
 
-_MATCHMAKING_TIMEOUT_SECONDS = 60
+_MATCHMAKING_TIMEOUT_SECONDS = 15
 
 _QueueKey = tuple
 _queue: dict[_QueueKey, list["asyncio.Future[str]"]] = defaultdict(list)

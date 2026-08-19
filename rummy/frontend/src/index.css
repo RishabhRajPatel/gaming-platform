@@ -4,6 +4,158 @@
 
 :root {
   color-scheme: dark;
+
+  /* ---- Lobby casino palette (Lobby.tsx only — GameTable keeps its felt/gold theme) ---- */
+  --lobby-bg-dark: #120b0b;
+  --lobby-bg-black: #090707;
+  --lobby-balance-bg: #3a1015;
+  --lobby-balance-border: #6e2026;
+  --lobby-balance-text: #ffd928;
+  --lobby-gold: #ffc928;
+  --lobby-add-text: #8a3f00;
+  --lobby-add-border: #ffe75a;
+  --lobby-withdraw-border: #b7ff3c;
+  --lobby-card-blue-1: #3a78b8;
+  --lobby-card-blue-2: #24518a;
+  --lobby-selected-glow: #f7ff4a;
+  --lobby-selected-glow-2: #dfff26;
+  --lobby-tab-inactive-1: #8e202a;
+  --lobby-tab-inactive-2: #65131b;
+  --lobby-tab-active-1: #d83a4c;
+  --lobby-tab-active-2: #a7192a;
+  --lobby-tab-active-3: #82121e;
+  --lobby-tab-active-border: #d84a52;
+  --lobby-tab-text: #ffd0c5;
+  --lobby-tab-active-text: #ffe5dd;
+  --lobby-checkbox-bg: #210b0d;
+  --lobby-checkbox-border: #6e261d;
+  --lobby-checkbox-active-bg: #21100b;
+  --lobby-checkbox-active-border: #7c4a18;
+  --lobby-check-green: #73ff24;
+  --lobby-table-header-1: #68141b;
+  --lobby-table-header-2: #4a0d13;
+  --lobby-table-header-text: #ffb3a2;
+  --lobby-row-1: #a82a38;
+  --lobby-row-2: #8d1f2d;
+  --lobby-row-border: #b63a45;
+  --lobby-money-text: #ffe72b;
+  --lobby-player-icon: #7dff22;
+  --lobby-online-icon: #ffe52b;
+  --lobby-play-text: #fff9d5;
+}
+
+.lobby-casino {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(110, 35, 20, 0.45), transparent 45%),
+    linear-gradient(135deg, var(--lobby-bg-black) 0%, #2a0d0d 45%, #100707 100%);
+  min-height: 100vh;
+}
+
+.lobby-home-btn {
+  color: var(--lobby-gold);
+}
+
+.lobby-balance-bar {
+  background: var(--lobby-balance-bg);
+  border: 1px solid var(--lobby-balance-border);
+  color: var(--lobby-balance-text);
+}
+
+.lobby-btn-add {
+  background: linear-gradient(180deg, #ffe86a 0%, #ffc21a 50%, #f39a00 100%);
+  color: var(--lobby-add-text);
+  border: 1px solid var(--lobby-add-border);
+  box-shadow: 0 0 8px rgba(255, 210, 40, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.5);
+  font-weight: 700;
+}
+
+.lobby-btn-withdraw {
+  background: linear-gradient(180deg, #c8ff54 0%, #62d51a 45%, #229600 100%);
+  color: #ffffff;
+  border: 1px solid var(--lobby-withdraw-border);
+  box-shadow: 0 0 10px rgba(80, 255, 30, 0.65);
+  font-weight: 700;
+}
+
+.lobby-game-card {
+  background: linear-gradient(145deg, var(--lobby-card-blue-1), var(--lobby-card-blue-2));
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  color: #fff;
+}
+
+.lobby-game-card.selected {
+  border: 3px solid var(--lobby-selected-glow);
+  box-shadow: 0 0 8px var(--lobby-selected-glow), 0 0 18px var(--lobby-selected-glow-2),
+    0 0 30px rgba(255, 230, 40, 0.55);
+}
+
+.lobby-tab {
+  background: linear-gradient(180deg, var(--lobby-tab-inactive-1) 0%, var(--lobby-tab-inactive-2) 100%);
+  color: var(--lobby-tab-text);
+  font-weight: 700;
+}
+
+.lobby-tab.active {
+  background: linear-gradient(
+    180deg,
+    var(--lobby-tab-active-1) 0%,
+    var(--lobby-tab-active-2) 55%,
+    var(--lobby-tab-active-3) 100%
+  );
+  border: 1px solid var(--lobby-tab-active-border);
+  color: var(--lobby-tab-active-text);
+}
+
+.lobby-filter-box {
+  background: var(--lobby-checkbox-bg);
+  border: 2px solid var(--lobby-checkbox-border);
+}
+
+.lobby-filter-box.active {
+  background: var(--lobby-checkbox-active-bg);
+  border: 2px solid var(--lobby-checkbox-active-border);
+}
+
+.lobby-filter-check {
+  color: var(--lobby-check-green);
+}
+
+.lobby-table-header {
+  background: linear-gradient(180deg, var(--lobby-table-header-1) 0%, var(--lobby-table-header-2) 100%);
+  color: var(--lobby-table-header-text);
+  font-weight: 700;
+}
+
+.lobby-table-row {
+  background: linear-gradient(180deg, var(--lobby-row-1) 0%, var(--lobby-row-2) 100%);
+  border-bottom: 1px solid var(--lobby-row-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.lobby-money-text {
+  color: var(--lobby-money-text);
+  font-weight: 700;
+}
+
+.lobby-player-icon {
+  color: var(--lobby-player-icon);
+}
+
+.lobby-online-icon {
+  color: var(--lobby-online-icon);
+}
+
+.lobby-play-btn {
+  background: linear-gradient(180deg, #fff06a 0%, #ffc62a 45%, #f39a00 100%);
+  border: 1px solid #ffe85b;
+  color: var(--lobby-play-text);
+  text-shadow: 0 1px 2px rgba(80, 40, 0, 0.7);
+  box-shadow: 0 0 8px rgba(255, 196, 30, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+}
+
+.lobby-play-btn:disabled {
+  opacity: 0.6;
 }
 
 body {
