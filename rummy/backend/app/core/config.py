@@ -47,6 +47,23 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.app_env.lower() in ("production", "prod")
 
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        """`database_url`, forced onto the psycopg (v3) dialect.
+
+        Hosted Postgres providers (Render, etc.) hand out a plain
+        postgres(ql):// connection string, which SQLAlchemy defaults to the
+        psycopg2 dialect — not installed here, only psycopg v3 is (see
+        requirements.txt). Rewrite the scheme explicitly so any DATABASE_URL,
+        from any host, loads the driver we actually have.
+        """
+        url = self.database_url
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        if url.startswith("postgresql://"):
+            url = "postgresql+psycopg://" + url[len("postgresql://"):]
+        return url
+
 
 @lru_cache
 def get_settings() -> Settings:
