@@ -159,6 +159,7 @@ export default function GameTable() {
   const { state, hand, connected, lastError, send } = useGameSocket(tableId, token);
 
   const [table, setTable] = useState<Table | null>(null);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [groups, setGroups] = useState<string[][]>([]);
   const [finishCard, setFinishCard] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -464,7 +465,7 @@ export default function GameTable() {
       >
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-gold-500/60 to-transparent" />
         <div className="flex items-center gap-3">
-          <button className="btn-ghost px-2 py-1 flex items-center gap-1.5" onClick={() => navigate("/lobby")}>
+          <button className="btn-ghost px-2 py-1 flex items-center gap-1.5" onClick={() => setLeaveConfirmOpen(true)}>
             <ArrowLeft size={16} />
             Lobby
           </button>
@@ -818,6 +819,29 @@ export default function GameTable() {
       </div>
 
       {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
+
+      {leaveConfirmOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="card-surface w-full max-w-sm p-6 text-center">
+            <h2 className="font-display text-lg font-bold text-gold-400 mb-3">Leave Table</h2>
+            <p className="text-sm text-slate-300 mb-6">Are you sure you want to leave the table?</p>
+            <div className="flex gap-3">
+              <button
+                className="btn-ghost rounded-full px-4 py-2 flex-1"
+                onClick={() => setLeaveConfirmOpen(false)}
+              >
+                No
+              </button>
+              <button
+                className="btn-danger rounded-full px-4 py-2 flex-1"
+                onClick={() => navigate("/lobby")}
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating toast for the last server-rejected action */}
       {lastError && (
