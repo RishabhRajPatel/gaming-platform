@@ -40,3 +40,4 @@ docker-compose.override.yml
 *.pem
 *.key
 secrets/
+rummy-apk/
