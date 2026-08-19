@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, Users, MessageCircle, Smile, Settings, Flag,
-  Layers3, Trash2, RotateCcw, Sparkles, Shuffle, Play, Trophy,
+  Layers3, Trash2, RotateCcw, Sparkles, Shuffle, Trophy,
 } from "lucide-react";
 import PlayingCard from "../components/game/PlayingCard";
+import RulesModal from "../components/RulesModal";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { autoArrange, classifyGroup, deadwoodPoints, isWild, parseCard, sortHand } from "../services/melds";
 import { TableApi, type Table } from "../services/api";
@@ -158,6 +159,8 @@ export default function GameTable() {
   const [tossMessage, setTossMessage] = useState<string | null>(null);
   const [tossFading, setTossFading] = useState(false);
   const tossShownForDeal = useRef<number | null>(null);
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   // Real device height, not just Tailwind's `short:` CSS breakpoint — cards need an
   // actually smaller layout box on landscape phones (~390px tall), not just a visual
@@ -219,8 +222,8 @@ export default function GameTable() {
     if (!firstPlayer) return;
     setTossMessage(`${firstPlayer.name} won the toss and will play first.`);
     setTossFading(false);
-    const fadeTimer = setTimeout(() => setTossFading(true), 2200);
-    const clearTimer = setTimeout(() => setTossMessage(null), 2700);
+    const fadeTimer = setTimeout(() => setTossFading(true), 1700);
+    const clearTimer = setTimeout(() => setTossMessage(null), 2000);
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(clearTimer);
@@ -242,7 +245,7 @@ export default function GameTable() {
 
   function handleStart() {
     send({ action: "start" });
-    setStartCountdown(3);
+    setStartCountdown(5);
   }
 
   useEffect(() => {
@@ -270,6 +273,34 @@ export default function GameTable() {
   const phase = state?.phase ?? "connecting";
   const wildRank = state?.wild_rank ?? null;
   const opponents = state?.players.filter((p) => p.id !== me?.id) ?? [];
+
+  // Auto-start: once enough players are seated, the deal begins on its own — no
+  // manual "Start deal" click needed. If the table is already full, start almost
+  // immediately; if only the 2-player minimum is met on a bigger table, give
+  // stragglers a real window to join before dealing locks the table (starting the
+  // instant 2/4 are seated would strand the other seats — they can't join mid-deal).
+  // Only the seat-0 client actually sends the command, so two simultaneous clients
+  // don't both fire it; a harmless server-side rejection either way.
+  //
+  // For deal_over specifically, wait for the player to dismiss the result overlay
+  // first (resultDismissed) — auto-starting the instant the deal ends would yank
+  // the result screen away before anyone's had a chance to read it.
+  const autoStartedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!state || !me || !table) return;
+    const ready =
+      state.phase === "waiting" || (state.phase === "deal_over" && resultDismissed);
+    if (!ready) return;
+    if (state.players.length < 2) return;
+    if (state.players[0]?.id !== me.id) return;
+    const key = `${state.phase}-${state.deal_number}-${state.players.length}`;
+    if (autoStartedFor.current === key) return;
+    autoStartedFor.current = key;
+    const isFull = state.players.length >= table.max_players;
+    const t = setTimeout(handleStart, isFull ? 600 : 12000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.phase, state?.deal_number, state?.players.length, me?.id, resultDismissed, table?.max_players]);
 
   const pointValue = table && table.mode === "real_money" ? table.entry_fee_paise / 100 : null;
   const modeName = table ? (table.mode === "real_money" ? "Points Rummy" : "Practice Rummy") : "";
@@ -402,7 +433,6 @@ export default function GameTable() {
   // player even before a deal starts, which made Drop look clickable while WAITING.
   const canDrop = myTurn && (phase === "await_draw" || phase === "await_discard");
   const seatedCount = state?.players.length ?? 0;
-  const canStart = (phase === "waiting" || phase === "deal_over") && seatedCount >= 2;
   const emptySeats = table ? Math.max(0, table.max_players - seatedCount) : 0;
 
   return (
@@ -723,13 +753,37 @@ export default function GameTable() {
         </button>
       </div>
       <div className="fixed right-4 top-1/2 z-40 hidden -translate-y-1/2 flex-col gap-3 lg:flex">
-        <button
-          className="flex h-12 w-12 flex-col items-center justify-center rounded-2xl border border-white/10 bg-black/70 text-white/70 backdrop-blur-xl transition hover:border-gold-400/50 hover:text-white"
-          onClick={() => alert("Settings — coming soon")}
-        >
-          <Settings size={19} />
-          <span className="mt-1 text-[9px]">Settings</span>
-        </button>
+        <div className="relative">
+          <button
+            className="flex h-12 w-12 flex-col items-center justify-center rounded-2xl border border-white/10 bg-black/70 text-white/70 backdrop-blur-xl transition hover:border-gold-400/50 hover:text-white"
+            onClick={() => setSettingsMenuOpen((v) => !v)}
+          >
+            <Settings size={19} />
+            <span className="mt-1 text-[9px]">Settings</span>
+          </button>
+          {settingsMenuOpen && (
+            <div className="absolute right-full top-0 mr-2 w-40 rounded-xl border border-white/10 bg-ink-900/95 backdrop-blur-xl shadow-2xl overflow-hidden">
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-ink-800 flex items-center gap-2"
+                onClick={() => {
+                  setSettingsMenuOpen(false);
+                  setRulesOpen(true);
+                }}
+              >
+                📖 Rules
+              </button>
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-ink-800"
+                onClick={() => {
+                  setSettingsMenuOpen(false);
+                  alert("Sound settings — coming soon");
+                }}
+              >
+                🔊 Sound
+              </button>
+            </div>
+          )}
+        </div>
         <button
           className="flex h-12 w-12 flex-col items-center justify-center rounded-2xl border border-white/10 bg-black/70 text-white/70 backdrop-blur-xl transition hover:border-red-400/50 hover:text-white"
           onClick={() => alert("Report — coming soon")}
@@ -738,6 +792,8 @@ export default function GameTable() {
           <span className="mt-1 text-[9px]">Report</span>
         </button>
       </div>
+
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
 
       {/* Floating toast for the last server-rejected action */}
       {lastError && (
@@ -822,10 +878,12 @@ export default function GameTable() {
         </div>
 
         <div className="flex flex-wrap justify-center gap-2 mb-3 short:mb-1 short:gap-1">
-          <button className="btn-ghost flex items-center gap-1.5 short:px-2 short:py-1 short:text-xs" disabled={selected.size < 2} onClick={groupSelected}>
-            <Layers3 size={15} className="text-purple-400" />
-            Group
-          </button>
+          {selected.size >= 2 && (
+            <button className="btn-ghost flex items-center gap-1.5 short:px-2 short:py-1 short:text-xs" onClick={groupSelected}>
+              <Layers3 size={15} className="text-purple-400" />
+              Group
+            </button>
+          )}
           <button className="btn-ghost flex items-center gap-1.5 short:px-2 short:py-1 short:text-xs" disabled={hand.length === 0} onClick={doSort}>
             <Shuffle size={15} />
             Sort
@@ -863,22 +921,24 @@ export default function GameTable() {
             </div>
           )}
           <div className="flex gap-2 short:gap-1.5 short:w-full short:justify-between">
-            <button className="btn-ghost rounded-full px-4 short:px-2 short:text-xs flex items-center gap-1.5" disabled={!canStart} onClick={handleStart}>
-              <Play size={15} />
-              Start deal
-            </button>
-            <button className="btn-ghost rounded-full px-4 short:px-2 short:text-xs flex items-center gap-1.5" disabled={!canDiscard} onClick={doDiscard}>
-              <Trash2 size={15} />
-              Discard
-            </button>
-            <button className="btn-danger rounded-full px-4 short:px-2 short:text-xs flex items-center gap-1.5" disabled={!canDrop} onClick={() => send({ action: "drop" })}>
-              <Flag size={15} />
-              Drop {dropCost}
-            </button>
-            <button className="btn-gold rounded-full px-5 short:px-3 short:text-xs flex items-center gap-1.5" disabled={!canDeclare} onClick={doDeclare}>
-              <Trophy size={15} />
-              Declare
-            </button>
+            {canDiscard && (
+              <button className="btn-ghost rounded-full px-4 short:px-2 short:text-xs flex items-center gap-1.5" onClick={doDiscard}>
+                <Trash2 size={15} />
+                Discard
+              </button>
+            )}
+            {canDrop && (
+              <button className="btn-danger rounded-full px-4 short:px-2 short:text-xs flex items-center gap-1.5" onClick={() => send({ action: "drop" })}>
+                <Flag size={15} />
+                Drop {dropCost}
+              </button>
+            )}
+            {canDeclare && (
+              <button className="btn-gold rounded-full px-5 short:px-3 short:text-xs flex items-center gap-1.5" onClick={doDeclare}>
+                <Trophy size={15} />
+                Declare
+              </button>
+            )}
           </div>
         </div>
         <div className="mt-3 short:hidden flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-2.5 text-xs text-white/60">
