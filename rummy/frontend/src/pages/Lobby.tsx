@@ -31,7 +31,7 @@ interface Tier {
   poolLimit: PoolLimit | null;
 }
 
-const POINT_VALUES = [1, 2, 5, 10];
+const POINT_VALUES = [0.1, 0.3, 1, 5, 10];
 const MAX_PLAYER_OPTIONS: (2 | 4)[] = [2, 4];
 
 function buildTiers(mode: Mode, poolLimit: PoolLimit): Tier[] {

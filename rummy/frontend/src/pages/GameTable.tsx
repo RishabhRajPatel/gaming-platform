@@ -165,7 +165,6 @@ export default function GameTable() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dragCode, setDragCode] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
-  const [startCountdown, setStartCountdown] = useState<number | null>(null);
   const [resultDismissed, setResultDismissed] = useState(false);
   const [playAgainBusy, setPlayAgainBusy] = useState(false);
   const [tossMessage, setTossMessage] = useState<string | null>(null);
@@ -226,13 +225,11 @@ export default function GameTable() {
 
   // "X won the toss and will play first" — purely a presentation of who the server
   // already picked as the opening player (see start_deal's dealer-relative seat pick);
-  // the client never chooses this, it just narrates it once per fresh deal. Waits for
-  // the "game will start in 5…" countdown to finish first, so the two overlays never
-  // show at the same time. The two flipped cards are decorative flavor only —
-  // randomised client side each time, not read from anyone's real hand.
+  // the client never chooses this, it just narrates it once per fresh deal. The two
+  // flipped cards are decorative flavor only — randomised client side each time, not
+  // read from anyone's real hand.
   useEffect(() => {
     if (!state || state.phase !== "await_draw") return;
-    if (startCountdown !== null) return;
     if (tossShownForDeal.current === state.deal_number) return;
     tossShownForDeal.current = state.deal_number;
     const firstPlayer = state.players.find((p) => p.id === state.turn);
@@ -240,33 +237,20 @@ export default function GameTable() {
     setTossMessage(`${firstPlayer.name} won the toss and will play first.`);
     setTossFading(false);
     setTossCards([randomCardCode(), randomCardCode()]);
-    const fadeTimer = setTimeout(() => setTossFading(true), 1700);
+    const fadeTimer = setTimeout(() => setTossFading(true), 2700);
     const clearTimer = setTimeout(() => {
       setTossMessage(null);
       setTossCards(null);
-    }, 2000);
+    }, 3000);
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(clearTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.phase, state?.deal_number, state?.turn, startCountdown]);
-
-  // Brief "dealing…" countdown after Start deal is pressed — cosmetic only, the
-  // actual deal already happened server-side by the time this finishes.
-  useEffect(() => {
-    if (startCountdown === null) return;
-    if (startCountdown <= 0) {
-      setStartCountdown(null);
-      return;
-    }
-    const t = setTimeout(() => setStartCountdown((s) => (s ?? 1) - 1), 1000);
-    return () => clearTimeout(t);
-  }, [startCountdown]);
+  }, [state?.phase, state?.deal_number, state?.turn]);
 
   function handleStart() {
     send({ action: "start" });
-    setStartCountdown(5);
   }
 
   useEffect(() => {
@@ -703,24 +687,6 @@ export default function GameTable() {
               <div className="short:hidden">
                 <StatusPill status={me.eliminated ? "out" : me.status} />
               </div>
-            </div>
-          )}
-
-          {startCountdown !== null && (
-            <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-              <p
-                className="px-6 py-3 rounded-full text-sm font-medium"
-                style={{
-                  background: "rgba(0, 42, 31, 0.92)",
-                  border: "1px solid rgba(30, 210, 145, 0.25)",
-                  color: "#E9F7EE",
-                  boxShadow: "0 4px 15px rgba(0,0,0,0.35)",
-                }}
-              >
-                {startCountdown > 0
-                  ? `The game will start in ${startCountdown} second${startCountdown === 1 ? "" : "s"}…`
-                  : "Dealing…"}
-              </p>
             </div>
           )}
 
