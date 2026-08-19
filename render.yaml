@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: deals-rummy-backend
+    runtime: docker
+    dockerfilePath: ./rummy/backend/Dockerfile
+    dockerContext: ./rummy/backend
+    plan: starter
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: API_V1_PREFIX
+        value: /api/v1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deals-rummy-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: deals-rummy-redis
+          property: connectionString
+      - key: REAL_MONEY_ENABLED
+        value: "false"
+      - key: GAME_MIN_PLAYERS
+        value: "2"
+      - key: GAME_MAX_PLAYERS
+        value: "4"
+      - key: GAME_DEFAULT_DEALS
+        value: "2"
+      - key: GAME_TURN_SECONDS
+        value: "30"
+      - key: GAME_STARTING_CHIPS
+        value: "160"
+      - key: FRONTEND_ORIGIN
+        value: https://frontend-two-alpha-49.vercel.app
+
+  - type: keyvalue
+    name: deals-rummy-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: deals-rummy-db
+    plan: free
+    databaseName: rummy
+    user: rummy
