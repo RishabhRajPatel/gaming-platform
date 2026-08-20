@@ -187,6 +187,30 @@ export default function GameTable() {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  // The felt table is a wide oval — it only works in landscape. The installed
+  // Android APK already force-locks landscape natively (manifest.webmanifest's
+  // "orientation": "landscape" — PWABuilder's TWA wrapper reads that directly, no
+  // JS involved). In a regular browser tab there's no reliable cross-browser way to
+  // force rotation, so we best-effort request a lock (works on Chrome/Android once
+  // fullscreen) and always fall back to a "please rotate" block for phones that
+  // stay portrait — tablets/desktops in a tall window are exempt (width check keeps
+  // this phone-only).
+  const [portraitPhone, setPortraitPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: portrait) and (max-width: 820px)");
+    setPortraitPhone(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setPortraitPhone(e.matches);
+    mq.addEventListener("change", onChange);
+
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    orientation?.lock?.("landscape").catch(() => {
+      // Not supported outside fullscreen/standalone contexts — the rotate-prompt
+      // overlay below is the fallback for those cases, not an error to surface.
+    });
+
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   async function handlePlayAgain() {
     if (!table) return;
     setPlayAgainBusy(true);
@@ -439,6 +463,16 @@ export default function GameTable() {
   const canDrop = myTurn && (phase === "await_draw" || phase === "await_discard");
   const seatedCount = state?.players.length ?? 0;
   const emptySeats = table ? Math.max(0, table.max_players - seatedCount) : 0;
+
+  if (portraitPhone) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center bg-ink-950">
+        <RotateCcw size={40} className="text-gold-500 animate-pulse" />
+        <p className="text-slate-200 font-medium">Please rotate your device to landscape mode</p>
+        <p className="text-slate-500 text-sm">Deals Rummy plays best in landscape.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">

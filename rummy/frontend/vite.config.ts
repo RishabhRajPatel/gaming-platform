@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // We register the SW ourselves (src/pwa.ts) so a detected update forces an
+      // immediate reload instead of silently activating on some later navigation.
+      injectRegister: false,
       // Only the app shell (JS/CSS/HTML/icons) is precached. /api and /ws are never
       // listed here and get no runtimeCaching entry below, so the service worker
       // never intercepts or caches live game state, cards, scores, turns, or the
