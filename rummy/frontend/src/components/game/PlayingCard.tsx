@@ -64,7 +64,10 @@ export default function PlayingCard({
       className={[
         size,
         "relative rounded-lg shadow-lg select-none border",
-        "transition-transform hover:-translate-y-1.5 hover:shadow-xl",
+        // Scoped to real mouse pointers only — on touch devices ":hover" can stick
+        // after a tap, shifting the card and making the *next* tap land on the
+        // wrong spot (the classic "button won't respond a second time" symptom).
+        "transition-transform [@media(hover:hover)]:hover:-translate-y-1.5 [@media(hover:hover)]:hover:shadow-xl",
         draggable ? "cursor-grab active:cursor-grabbing" : "",
         wild
           ? "bg-gradient-to-br from-gold-300 to-gold-500 border-gold-600"

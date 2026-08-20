@@ -27,6 +27,16 @@ function randomCardCode(): string {
   return `${rank}${suit}0`;
 }
 
+const SUIT_GLYPH: Record<string, string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
+
+function formatCardLabel(code: string): string {
+  if (code.startsWith("PJ")) return "the Joker";
+  const body = code.replace(/\d+$/, "");
+  const suitChar = body.slice(-1);
+  const rank = body.slice(0, -1);
+  return `${rank}${SUIT_GLYPH[suitChar] ?? ""}`;
+}
+
 /** A circular countdown ring around a player's avatar — depletes from `total` down to
  * 0. Purely visual (the numeric badges already told the story); the server is still
  * the sole authority on the real deadline, this just makes it legible at a glance. */
@@ -79,8 +89,8 @@ function ResultOverlay({
     .reduce((sum, p) => sum + p.deal_points, 0);
 
   return (
-    <div className="absolute inset-0 rounded-[50%] bg-black/80 flex flex-col items-center justify-center gap-3 z-30 px-10 text-center">
-      <p className="font-display text-2xl text-gold-400">
+    <div className="absolute inset-0 rounded-[50%] bg-black/80 flex flex-col items-center justify-center gap-1.5 z-30 px-6 text-center overflow-hidden">
+      <p className="font-display text-base sm:text-lg text-gold-400">
         {isGameOver
           ? isPool
             ? iWon ? "🏆 POOL WINNER" : "🏁 POOL OVER"
@@ -93,19 +103,19 @@ function ResultOverlay({
                 ? `🏆 ${winner.name} wins the deal`
                 : "Deal over"}
       </p>
-      <div className="w-full max-w-xs space-y-1">
+      <div className="w-full max-w-[15rem] space-y-0.5">
         {state.players.map((p) => (
-          <div key={p.id} className="flex justify-between text-sm bg-ink-900/60 rounded px-3 py-1">
+          <div key={p.id} className="flex justify-between text-[11px] bg-ink-900/60 rounded px-2 py-0.5">
             <span className={p.id === meId ? "text-gold-300 font-semibold" : "text-slate-200"}>
               {p.name}
-              {isPool && p.eliminated && <span className="ml-1 text-[9px] text-red-400 uppercase">out</span>}
+              {isPool && p.eliminated && <span className="ml-1 text-[8px] text-red-400 uppercase">out</span>}
             </span>
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5">
               <span className={p.id === state.winner_id ? "text-green-400" : "text-red-400"}>
                 {p.id === state.winner_id ? `+${pool}` : `-${p.deal_points}`}
               </span>
               {isPool && (
-                <span className="text-[10px] text-slate-500 font-mono">
+                <span className="text-[9px] text-slate-500 font-mono">
                   {p.total_score}/{state.pool_limit}
                 </span>
               )}
@@ -113,18 +123,18 @@ function ResultOverlay({
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-slate-500 font-mono">Game ID: {state.table_id}</p>
+      <p className="text-[8px] text-slate-500 font-mono hidden sm:block">Game ID: {state.table_id}</p>
       {isGameOver ? (
-        <div className="flex gap-2">
-          <button className="btn-gold rounded-full px-5" disabled={playAgainBusy} onClick={onPlayAgain}>
+        <div className="flex gap-1.5">
+          <button className="btn-gold rounded-full px-3 py-1 text-xs" disabled={playAgainBusy} onClick={onPlayAgain}>
             {playAgainBusy ? "Creating…" : "🔁 Play Again"}
           </button>
-          <button className="btn-ghost rounded-full px-5" onClick={onBackToLobby}>
+          <button className="btn-ghost rounded-full px-3 py-1 text-xs" onClick={onBackToLobby}>
             Back to Lobby
           </button>
         </div>
       ) : (
-        <button className="btn-gold rounded-full px-6 mt-2" onClick={onContinue}>
+        <button className="btn-gold rounded-full px-4 py-1 text-xs mt-1" onClick={onContinue}>
           Continue
         </button>
       )}
@@ -148,11 +158,33 @@ export default function GameTable() {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [resultDismissed, setResultDismissed] = useState(false);
   const [playAgainBusy, setPlayAgainBusy] = useState(false);
-  const [tossMessage, setTossMessage] = useState<string | null>(null);
-  const [tossFading, setTossFading] = useState(false);
-  const [tossCards, setTossCards] = useState<[string, string] | null>(null);
+  // Shared "table announcement" banner — toss, discard, and drop all reuse this
+  // same pill (text + up to 2 decorative/real cards) instead of each owning a
+  // separate state+timer pair.
+  const [announceText, setAnnounceText] = useState<string | null>(null);
+  const [announceFading, setAnnounceFading] = useState(false);
+  const [announceCards, setAnnounceCards] = useState<string[]>([]);
   const tossShownForDeal = useRef<number | null>(null);
-  const tossTimers = useRef<{ fade?: ReturnType<typeof setTimeout>; clear?: ReturnType<typeof setTimeout> }>({});
+  const announceTimers = useRef<{ fade?: ReturnType<typeof setTimeout>; clear?: ReturnType<typeof setTimeout> }>({});
+  const lastTurnRef = useRef<string | null>(null);
+  const prevTopDiscardRef = useRef<string | null>(null);
+  const lastStatusRef = useRef<Record<string, string>>({});
+
+  function announce(text: string, cards: string[] = [], durationMs = 3000) {
+    setAnnounceText(text);
+    setAnnounceFading(false);
+    setAnnounceCards(cards);
+    // Timers live in a ref, not this call's own closure/effect cleanup — a later
+    // announce() (or unrelated re-render) must not accidentally cancel a pending
+    // hide without rescheduling it (see the toss-banner-stuck bug this replaced).
+    clearTimeout(announceTimers.current.fade);
+    clearTimeout(announceTimers.current.clear);
+    announceTimers.current.fade = setTimeout(() => setAnnounceFading(true), durationMs - 300);
+    announceTimers.current.clear = setTimeout(() => {
+      setAnnounceText(null);
+      setAnnounceCards([]);
+    }, durationMs);
+  }
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   // No sound effects exist yet, but the preference itself is real and persists —
@@ -237,26 +269,43 @@ export default function GameTable() {
     tossShownForDeal.current = state.deal_number;
     const firstPlayer = state.players.find((p) => p.id === state.turn);
     if (!firstPlayer) return;
-    setTossMessage(`${firstPlayer.name} won the toss and will play first.`);
-    setTossFading(false);
-    setTossCards([randomCardCode(), randomCardCode()]);
-    // Timers are owned by a ref, not this effect's cleanup — turn/phase changing
-    // later in the same deal (e.g. the first player draws within 3s) would otherwise
-    // re-run this effect, cancel the pending hide-timers via cleanup, and then hit
-    // the guard above and return before rescheduling — leaving the toast stuck
-    // forever. Clearing+resetting here (only reached once per deal) avoids that.
-    clearTimeout(tossTimers.current.fade);
-    clearTimeout(tossTimers.current.clear);
-    tossTimers.current.fade = setTimeout(() => setTossFading(true), 2700);
-    tossTimers.current.clear = setTimeout(() => {
-      setTossMessage(null);
-      setTossCards(null);
-    }, 3000);
+    announce(`${firstPlayer.name} won the toss and will play first.`, [randomCardCode(), randomCardCode()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase, state?.deal_number, state?.turn]);
 
+  // "X discarded 7♥" — fires exactly once per real discard by comparing the new
+  // top_discard against the last-seen one, rather than depending on state.turn
+  // alone (turn also changes on a drop, which isn't a discard).
   useEffect(() => {
-    const timers = tossTimers.current;
+    if (!state) return;
+    if (state.top_discard && state.top_discard !== prevTopDiscardRef.current) {
+      const discarder = state.players.find((p) => p.id === lastTurnRef.current);
+      if (discarder) {
+        announce(`${discarder.name} discarded ${formatCardLabel(state.top_discard)}`, [state.top_discard], 2200);
+      }
+    }
+    prevTopDiscardRef.current = state.top_discard;
+    lastTurnRef.current = state.turn ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.top_discard, state?.turn]);
+
+  // "X dropped the hand" — fires once per player the first time their status
+  // flips to "dropped" (guarded so a reconnect that loads an already-dropped
+  // player doesn't retroactively announce it).
+  useEffect(() => {
+    if (!state) return;
+    for (const p of state.players) {
+      const prevStatus = lastStatusRef.current[p.id];
+      if (prevStatus !== undefined && prevStatus !== "dropped" && p.status === "dropped") {
+        announce(`${p.name} dropped the hand.`, [], 2200);
+      }
+      lastStatusRef.current[p.id] = p.status;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.players]);
+
+  useEffect(() => {
+    const timers = announceTimers.current;
     return () => {
       clearTimeout(timers.fade);
       clearTimeout(timers.clear);
@@ -321,6 +370,7 @@ export default function GameTable() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase, state?.deal_number, state?.players.length, me?.id, resultDismissed, table?.max_players]);
 
+  const showingResult = !!state && (state.phase === "deal_over" || state.phase === "game_over") && !resultDismissed;
   const pointValue = table && table.mode === "real_money" ? table.entry_fee_paise / 100 : null;
   const modeName = table ? (table.mode === "real_money" ? "Points Rummy" : "Practice Rummy") : "";
   const dropPoints = phase === "await_draw" && hand.length === 13 ? FIRST_DROP_POINTS : MIDDLE_DROP_POINTS;
@@ -545,11 +595,11 @@ export default function GameTable() {
             <div className="gt-watermark">RUMMY</div>
           </div>
 
-          <div className="relative z-10 pt-1 text-center">
+          <div className={`relative z-10 pt-1 text-center ${showingResult ? "invisible" : ""}`}>
             <div className="flex justify-center gap-5 flex-wrap px-6">
               {opponents.map((p) => (
                 <div key={p.id} className="text-center relative">
-                  <div className="relative w-10 h-10 mx-auto">
+                  <div className="relative gt-seat-avatar">
                     <div className={`absolute inset-0 rounded-full bg-gradient-to-br from-[#2B3045] to-[#090B14] border-2 flex items-center justify-center font-display font-bold text-sm ${state?.turn === p.id ? "border-[#F4C542] shadow-[0_0_18px_rgba(244,197,66,.45)]" : "border-white/30"}`}>{p.name.slice(0, 2).toUpperCase()}</div>
                     {state?.turn === p.id && secondsLeft !== null && <TurnRing seconds={secondsLeft} total={table?.turn_seconds ?? 30} size={40} />}
                     {state?.turn === p.id && secondsLeft !== null && <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#0B1020] border-2 border-[#F4C542] flex items-center justify-center text-[7px] font-mono font-bold text-[#F4C542]">{secondsLeft}</span>}
@@ -563,7 +613,7 @@ export default function GameTable() {
               ))}
               {phase === "waiting" && Array.from({ length: emptySeats }).map((_, i) => (
                 <div key={`empty-${i}`} className="text-center opacity-40">
-                  <div className="w-10 h-10 rounded-full border-2 border-dashed border-white/30 flex items-center justify-center mx-auto"><span className="text-lg text-white/40">?</span></div>
+                  <div className="gt-seat-avatar rounded-full border-2 border-dashed border-white/30 flex items-center justify-center"><span className="text-lg text-white/40">?</span></div>
                   <div className="text-[9px] text-white/50 mt-0.5">Empty</div>
                 </div>
               ))}
@@ -572,11 +622,11 @@ export default function GameTable() {
 
           <div className="gt-piles">
             <div className="text-center">
-              {state?.wild_joker ? <PlayingCard code={state.wild_joker} wild small /> : <div className="w-12 h-[4.5rem] rounded-lg bg-black/20 border border-dashed border-white/25" />}
+              {state?.wild_joker ? <PlayingCard code={state.wild_joker} wild small className="gt-pile-card" /> : <div className="gt-pile-card rounded-lg bg-black/20 border border-dashed border-white/25" />}
               <div className="gt-pile-label">Wild</div>
             </div>
             <button className="text-center disabled:opacity-60" disabled={!myTurn || phase !== "await_draw"} onClick={() => send({ action: "draw", source: "stock" })}>
-              <PlayingCard code="" faceDown small />
+              <PlayingCard code="" faceDown small className="gt-pile-card" />
               <div className="gt-pile-label">Closed ({state?.stock_count ?? 0})</div>
             </button>
             <div
@@ -585,7 +635,7 @@ export default function GameTable() {
               className={`text-center ${myTurn && phase === "await_draw" ? "cursor-pointer" : "opacity-60"}`}
               onClick={myTurn && phase === "await_draw" ? () => send({ action: "draw", source: "discard" }) : undefined}
             >
-              {state?.top_discard ? <PlayingCard code={state.top_discard} small /> : <div className="w-12 h-[4.5rem] rounded-lg bg-black/20 border border-dashed border-white/25" />}
+              {state?.top_discard ? <PlayingCard code={state.top_discard} small className="gt-pile-card" /> : <div className="gt-pile-card rounded-lg bg-black/20 border border-dashed border-white/25" />}
               <div className="gt-pile-label">Open ({state?.discard_count ?? 0})</div>
             </div>
             <div
@@ -597,15 +647,15 @@ export default function GameTable() {
               onDragOver={(e) => e.preventDefault()}
               onDrop={dropOnFinishSlot}
             >
-              {finishCard ? <PlayingCard code={finishCard} small /> : "Finish\nSlot"}
+              {finishCard ? <PlayingCard code={finishCard} small className="gt-pile-card" /> : "Finish\nSlot"}
             </div>
 
-            {tossMessage && (
-              <div className={`absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-opacity duration-500 ${tossFading ? "opacity-0" : "opacity-100"}`}>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-medium text-center bg-[#002A1F]/95 border border-[#1ED291]/30 shadow-2xl max-w-[92%]">
-                  {tossCards && <PlayingCard code={tossCards[0]} small />}
-                  <span>{tossMessage}</span>
-                  {tossCards && <PlayingCard code={tossCards[1]} small />}
+            {announceText && (
+              <div className={`absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-opacity duration-500 ${announceFading ? "opacity-0" : "opacity-100"}`}>
+                <div className="gt-announce flex items-center text-center bg-[#002A1F]/95 border border-[#1ED291]/30 shadow-2xl">
+                  {announceCards[0] && <PlayingCard code={announceCards[0]} small className="gt-announce-card" />}
+                  <span>{announceText}</span>
+                  {announceCards[1] && <PlayingCard code={announceCards[1]} small className="gt-announce-card" />}
                 </div>
               </div>
             )}
@@ -618,8 +668,8 @@ export default function GameTable() {
           )}
 
           {me && (
-            <div className="relative z-10 text-center pb-1">
-              <div className="relative w-9 h-9 mx-auto">
+            <div className={`relative z-10 text-center pb-1 ${showingResult ? "invisible" : ""}`}>
+              <div className="relative gt-seat-avatar">
                 <div className={`absolute inset-0 rounded-full bg-gradient-to-br from-[#2B3045] to-[#090B14] border-2 flex items-center justify-center font-display font-bold text-xs ${myTurn ? "border-[#F4C542] shadow-[0_0_18px_rgba(244,197,66,.45)]" : "border-white/30"}`}>{me.name.slice(0, 2).toUpperCase()}</div>
                 {myTurn && secondsLeft !== null && <TurnRing seconds={secondsLeft} total={table?.turn_seconds ?? 30} size={36} />}
               </div>
