@@ -1,0 +1,43 @@
+{
+  "packageId": "app.vercel.frontend_two_alpha_49.twa",
+  "host": "frontend-two-alpha-49.vercel.app",
+  "name": "Rummy",
+  "launcherName": "Rummy",
+  "display": "standalone",
+  "themeColor": "#0b1f17",
+  "themeColorDark": "#0b1f17",
+  "navigationColor": "#0b1f17",
+  "navigationColorDark": "#0b1f17",
+  "navigationDividerColor": "#00000000",
+  "navigationDividerColorDark": "#00000000",
+  "backgroundColor": "#0b1f17",
+  "enableNotifications": false,
+  "startUrl": "/lobby",
+  "iconUrl": "https://frontend-two-alpha-49.vercel.app/icon-512.png",
+  "maskableIconUrl": "https://frontend-two-alpha-49.vercel.app/icon-512.png",
+  "monochromeIconUrl": "",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./signing.keystore",
+    "alias": "my-key-alias"
+  },
+  "appVersion": "1.0.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://frontend-two-alpha-49.vercel.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "landscape",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": []
+}

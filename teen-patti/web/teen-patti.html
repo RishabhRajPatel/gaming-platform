@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+<title>Teen Patti</title>
+<style>
+  :root{--gold:#f4cf6a;--gold-2:#d4af37;--felt:#1aa07e;--felt-d:#0c6d54;--felt-e:#0a4d3d;
+    --green:#2fb84d;--green-d:#1f8f39;--red:#e0473a;--grey:#7a7f88;--chip:#5b3aa8}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+  html,body{height:100%}
+  body{font-family:"Segoe UI",system-ui,sans-serif;color:#fff;overflow:hidden;
+    background:radial-gradient(120% 90% at 50% 0%,#3a2b5e 0%,#241a40 45%,#140e26 100%)}
+  #rotate{display:none;position:fixed;inset:0;z-index:99;background:#140e26;align-items:center;
+    justify-content:center;text-align:center;flex-direction:column;gap:14px;padding:24px}
+  #rotate .ph{font-size:52px;animation:spin 2s ease-in-out infinite}
+  @keyframes spin{0%,100%{transform:rotate(0)}50%{transform:rotate(90deg)}}
+  @media (orientation:portrait) and (max-width:820px){#rotate{display:flex}#game{display:none}}
+
+  #game{position:relative;width:100vw;height:100dvh;overflow:hidden}
+
+  /* top bar */
+  .marquee{position:absolute;top:6px;left:50%;transform:translateX(-50%);font-size:12px;color:#ffe9b0;
+    background:rgba(0,0,0,.3);padding:3px 14px;border-radius:999px;white-space:nowrap;z-index:9}
+  .topL{position:absolute;top:8px;left:10px;display:flex;gap:8px;align-items:center;z-index:10}
+  .topR{position:absolute;top:8px;right:10px;z-index:10;display:flex;gap:8px;align-items:center}
+  .rico{width:38px;height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.3);
+    background:rgba(0,0,0,.4);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center}
+  .rank-btn{display:flex;flex-direction:column;align-items:center;color:var(--gold);font-size:9px;font-weight:800}
+  .rank-btn .c{font-size:22px;line-height:1}
+  .addbtn{background:linear-gradient(180deg,#ff6a6a,#d42a2a);color:#fff;border:2px solid #ffd36a;
+    border-radius:999px;padding:6px 14px 6px 12px;font-weight:900;font-size:14px;display:flex;align-items:center;gap:6px}
+  .addbtn .c{background:var(--gold);color:#7a5a00;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+  /* felt */
+  .felt{position:absolute;top:56px;left:2.5%;right:2.5%;bottom:104px;border-radius:48%/50%;
+    background:radial-gradient(circle at 50% 40%,var(--felt) 0%,var(--felt-d) 62%,var(--felt-e) 100%);
+    border:10px solid #17233a;box-shadow:0 0 0 5px rgba(232,195,122,.2),inset 0 0 70px rgba(0,0,0,.5)}
+  .watermark{position:absolute;top:44%;left:50%;transform:translate(-50%,-50%);font-size:min(9vw,58px);
+    font-weight:900;letter-spacing:4px;color:rgba(255,255,255,.06);z-index:1;white-space:nowrap}
+
+  /* dealer + pot */
+  .dealer{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:4;text-align:center}
+  .dealer .fig{font-size:44px;line-height:1;filter:drop-shadow(0 3px 4px rgba(0,0,0,.5))}
+  .potchip{position:absolute;top:118px;left:50%;transform:translateX(-50%);z-index:5;
+    background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.15);border-radius:999px;
+    padding:5px 16px 5px 8px;font-weight:900;font-size:18px;color:var(--gold);display:flex;align-items:center;gap:7px}
+  .spade{width:22px;height:22px;border-radius:50%;background:var(--chip);display:inline-flex;
+    align-items:center;justify-content:center;color:#fff;font-size:12px;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+  .msg{position:absolute;top:150px;left:50%;transform:translateX(-50%);z-index:5;font-weight:800;
+    font-size:13px;text-align:center;max-width:60vw;text-shadow:0 1px 3px #000}
+  .msg.win{color:#8ff2a5}.msg.lose{color:#ff9a8a}
+
+  /* seats */
+  .seat{position:absolute;z-index:4;width:150px;transition:.2s}
+  .seat-inner{display:flex;align-items:center;gap:6px}
+  .seat.right .seat-inner{flex-direction:row-reverse}
+  .avatar{width:58px;height:58px;border-radius:50%;flex:0 0 auto;position:relative;
+    background:linear-gradient(180deg,#5a6b8c,#33415e);border:3px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 3px 8px rgba(0,0,0,.5)}
+  .seat.turn .avatar{border-color:#fff;box-shadow:0 0 16px rgba(255,255,255,.7)}
+  .seat.winner .avatar{border-color:var(--green);box-shadow:0 0 20px rgba(47,184,77,.8)}
+  .seat.packed{opacity:.4;filter:grayscale(.7)}
+  .nm{font-size:11px;font-weight:700;text-align:center;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px}
+  .cardstack{position:relative;width:52px;height:40px}
+  .cardstack .cb{position:absolute;width:26px;height:37px;border-radius:4px;top:0;
+    background:#c33;border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5);
+    background-image:repeating-linear-gradient(45deg,#e05a5a,#e05a5a 3px,#b83232 3px,#b83232 6px)}
+  .cardstack .cb:nth-child(1){left:0;transform:rotate(-10deg)}
+  .cardstack .cb:nth-child(2){left:12px;top:-1px}
+  .cardstack .cb:nth-child(3){left:24px;transform:rotate(10deg)}
+  .cardstack .cm{position:absolute;width:24px;height:34px;border-radius:4px;background:#fff;color:#111;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:10px;border:1px solid #ccc}
+  .cardstack .cm.red{color:#d11e2a}
+  .cardstack .cm:nth-child(1){left:0}.cardstack .cm:nth-child(2){left:14px}.cardstack .cm:nth-child(3){left:28px}
+  .seen-badge{position:absolute;left:50%;top:6px;transform:translateX(-50%) rotate(-6deg);
+    background:#2a2f3a;color:#fff;font-weight:900;font-size:11px;padding:3px 8px;border-radius:5px;
+    border:1px solid rgba(255,255,255,.35);letter-spacing:.5px;z-index:2}
+  .betpill{margin-top:4px;background:rgba(0,0,0,.5);border-radius:999px;padding:2px 10px 2px 4px;
+    font-size:12px;font-weight:800;color:var(--gold);display:inline-flex;align-items:center;gap:5px}
+  .betpill .spade{width:16px;height:16px;font-size:9px}
+  .seatcol{display:flex;flex-direction:column;align-items:center}
+
+  .seat-p1{top:16%;left:5%} .seat-p1 .seat-inner{flex-direction:row}
+  .seat-p2{top:16%;right:5%} .seat-p3{top:48%;right:2%}
+
+  /* your area */
+  .youwrap{position:absolute;bottom:96px;left:0;right:0;display:flex;flex-direction:column;align-items:center;z-index:6}
+  .youhand{display:flex;gap:8px;position:relative}
+  .card{width:60px;height:84px;border-radius:8px;background:#fff;color:#111;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;font-weight:800;box-shadow:0 4px 10px rgba(0,0,0,.5);animation:deal .2s ease}
+  .card.red{color:#d11e2a}.card .r{font-size:22px;line-height:1}.card .s{font-size:18px;line-height:1}
+  .cardback{width:60px;height:84px;border-radius:8px;border:2px solid #fff;
+    background-image:repeating-linear-gradient(45deg,#e05a5a,#e05a5a 5px,#b83232 5px,#b83232 10px);
+    box-shadow:0 4px 10px rgba(0,0,0,.5)}
+  @keyframes deal{from{transform:translateY(-18px) scale(.85);opacity:0}to{transform:none;opacity:1}}
+  .seebtn{position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);z-index:7;
+    background:linear-gradient(180deg,#5fd36f,var(--green-d));color:#fff;font-weight:900;font-size:16px;
+    border:none;border-radius:999px;padding:9px 30px;box-shadow:0 4px 10px rgba(0,0,0,.5)}
+  .yourank{font-size:12px;color:var(--gold);font-weight:800;min-height:15px;margin-top:4px;text-shadow:0 1px 2px #000}
+
+  /* bottom bar */
+  .bottom{position:absolute;bottom:0;left:0;right:0;height:88px;display:flex;align-items:center;
+    justify-content:space-between;padding:0 12px;z-index:8;gap:8px}
+  .bl,.br{display:flex;gap:8px;align-items:center}
+  .abtn{border:none;border-radius:12px;padding:0 18px;height:52px;font-weight:900;font-size:16px;color:#fff;
+    box-shadow:0 4px 10px rgba(0,0,0,.4);min-width:88px;transition:transform .1s}
+  .abtn:active{transform:scale(.96)}
+  .abtn small{display:block;font-weight:700;font-size:12px;opacity:.9}
+  .abtn.pack{background:linear-gradient(180deg,#e86a5f,var(--red))}
+  .abtn.side{background:linear-gradient(180deg,#8b909a,var(--grey))}
+  .abtn.blind{background:linear-gradient(180deg,#5fd36f,var(--green-d))}
+  .abtn.chaal{background:linear-gradient(180deg,#5fd36f,var(--green-d))}
+  .abtn.show{background:linear-gradient(180deg,#ffcf6a,var(--gold-2));color:#5a3d00}
+  .abtn:disabled{opacity:.4}
+  .mepill{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.55);border:2px solid var(--gold);
+    border-radius:999px;padding:4px 16px 4px 4px}
+  .mepill .av{width:44px;height:44px;border-radius:50%;background:linear-gradient(180deg,#f0c060,#c88a20);
+    display:flex;align-items:center;justify-content:center;font-size:22px}
+  .mepill .bal{font-weight:900;font-size:17px;color:var(--gold);display:flex;align-items:center;gap:6px}
+  /* In-flow, directly above the cards — not a fixed pixel offset from the
+     screen, so it can never collide with the hand or the pot chip regardless
+     of viewport height (that fixed-offset collision was the bug). */
+  .turnbadge{font-weight:900;font-size:14px;color:var(--gold);text-shadow:0 1px 3px #000;
+    min-height:16px;margin-bottom:6px}
+
+  @media (max-height:460px){
+    .card,.cardback{width:50px;height:70px}
+    .youwrap{bottom:80px}
+    .bottom{height:76px}
+    .seebtn{bottom:-10px;padding:7px 24px;font-size:14px}
+    /* Popups (Hand Ranking, How to Play, Pack confirm, Side Show, results) must
+       never get cut off on a short phone screen — shrink their content and let
+       the modal itself scroll internally as a safety net either way. */
+    .modal{padding:12px 16px;max-height:92vh}
+    .modal h2{font-size:17px;margin-bottom:2px}
+    .modal .amt{font-size:16px;margin:4px 0}
+    .countbig{font-size:32px;margin:4px 0}
+    .waiting{font-size:14px}
+    .reveal{margin:8px 0;gap:10px}
+    .rev .card{width:26px;height:37px}
+    .rev .card .r{font-size:10px}.rev .card .s{font-size:9px}
+    .rev .rn{font-size:10px}.rev .rk{font-size:9px}
+    .btnrow{margin-top:8px;gap:8px}
+    .mbtn{padding:8px 16px;font-size:13px;border-radius:10px}
+    .rank-list{font-size:12px;line-height:1.5}
+  }
+
+  /* overlays */
+  .overlay{position:absolute;inset:0;background:rgba(6,6,14,.72);z-index:30;display:flex;align-items:center;
+    justify-content:center;backdrop-filter:blur(2px)}
+  .modal{background:linear-gradient(180deg,#241a40,#160f2b);border:1px solid rgba(244,207,106,.4);
+    border-radius:18px;padding:20px 24px;text-align:center;max-width:90vw;max-height:88vh;overflow-y:auto;
+    box-shadow:0 14px 44px rgba(0,0,0,.6)}
+  .modal h2{font-size:24px;margin-bottom:4px}
+  .modal .amt{font-size:22px;font-weight:900;margin:6px 0}
+  .win{color:#8ff2a5}.lose{color:#ff9a8a}
+  .reveal{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+  .rev{display:flex;flex-direction:column;align-items:center;gap:3px}
+  .rev .rn{font-size:11px;color:rgba(255,255,255,.75)}
+  .rev .rk{font-size:10px;color:var(--gold);font-weight:800}
+  .rev .cards{display:flex;gap:3px}
+  .rev .card{width:34px;height:48px}.rev .card .r{font-size:13px}.rev .card .s{font-size:11px}
+  .btnrow{display:flex;gap:10px;justify-content:center;margin-top:12px}
+  .mbtn{border:none;border-radius:12px;padding:11px 22px;font-weight:900;font-size:15px;color:#fff;background:linear-gradient(180deg,#5fd36f,var(--green-d))}
+  .mbtn.ghost{background:rgba(255,255,255,.14)}.mbtn.red{background:linear-gradient(180deg,#e86a5f,var(--red))}
+  .countbig{font-size:48px;font-weight:900;color:var(--gold);margin:8px 0}
+  .waiting{font-size:17px;font-weight:800}
+  .rank-list{text-align:left;font-size:13px;line-height:1.8}.rank-list b{color:var(--gold)}
+
+  /* ---------- lobby ---------- */
+  #lobby{position:fixed;inset:0;z-index:5;overflow-y:auto;padding:16px;
+    background:radial-gradient(120% 90% at 50% 0%,#3a2b5e 0%,#241a40 45%,#140e26 100%)}
+  .lobby-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .lobby-title{font-size:20px;font-weight:900;color:var(--gold)}
+  .lobby-wallet{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.4);border:1px solid var(--gold);
+    border-radius:999px;padding:6px 14px;font-weight:800}
+  .lobby-tabs{display:flex;gap:8px;margin-bottom:12px}
+  .lobby-tab{flex:0 0 auto;padding:9px 22px;border-radius:10px 10px 0 0;border:none;font-weight:800;
+    font-size:14px;background:rgba(255,255,255,.08);color:#ccc}
+  .lobby-tab.active{background:linear-gradient(180deg,#e86a5f,var(--red));color:#fff}
+  .lobby-tablehead,.lobby-row{display:grid;grid-template-columns:1fr 1fr .8fr 1fr 1.1fr;gap:8px;align-items:center}
+  .lobby-tablehead{padding:9px 12px;font-size:11px;text-transform:uppercase;color:#e7b7b0;
+    background:rgba(224,71,58,.25);border-radius:10px 10px 0 0}
+  .lobby-row{padding:13px 12px;background:rgba(224,71,58,.12);border-top:1px solid rgba(255,255,255,.06);
+    font-weight:700;font-size:14px}
+  .lobby-row .mbtn{padding:8px 14px;font-size:12px;justify-self:end;white-space:nowrap}
+  .lobby-row .mbtn:disabled{opacity:.4}
+  .lobby-empty{padding:24px;text-align:center;color:#bbb;font-size:13px}
+</style>
+</head>
+<body>
+<div id="rotate"><div class="ph">📱</div><div>Rotate your device to <b>landscape</b> to play.</div></div>
+
+<div id="game">
+  <div class="topL">
+    <button class="rico" id="btnBack">‹</button>
+    <button class="rico" id="btnInfo">i</button>
+    <button class="rank-btn" id="btnRank"><span class="c">👑</span>Ranking</button>
+  </div>
+  <div class="marquee" id="marquee">🔊 Welcome to Teen Patti — play free with chips</div>
+  <div class="topR">
+    <button class="rico" id="btnServer" title="Server">🌐</button>
+    <button class="addbtn" id="btnAdd">ADD <span class="c">₹</span></button>
+  </div>
+
+  <div class="felt"><div class="watermark">TEEN PATTI</div></div>
+  <div class="dealer"><div class="fig">👸</div></div>
+  <div class="potchip"><span class="spade">♠</span><span id="pot">0</span></div>
+  <div class="msg" id="msg"></div>
+
+  <div class="seat seat-p1" id="seat1"></div>
+  <div class="seat seat-p2 right" id="seat2"></div>
+  <div class="seat seat-p3 right" id="seat3"></div>
+
+  <div class="youwrap">
+    <div class="turnbadge" id="turnbadge"></div>
+    <div class="youhand" id="youhand"></div>
+    <button class="seebtn" id="seebtn" style="display:none">See</button>
+    <div class="yourank" id="yourank"></div>
+  </div>
+
+  <div class="bottom">
+    <div class="bl" id="barL"></div>
+    <div class="mepill"><div class="av">🙂</div><div class="bal"><span class="spade">♠</span><span id="balance">1000</span></div></div>
+    <div class="br" id="barR"></div>
+  </div>
+</div>
+
+<div id="lobby" style="display:none">
+  <div class="lobby-top">
+    <div class="lobby-title">🂡 Teen Patti</div>
+    <div class="lobby-wallet"><span class="spade">♠</span><span id="lobbyBalance">0</span></div>
+  </div>
+  <div class="lobby-tabs">
+    <button class="lobby-tab active" id="tabPractice">Practice</button>
+    <button class="lobby-tab" id="tabPoints">Points</button>
+  </div>
+  <div class="lobby-tablehead">
+    <span>Point Value</span><span>Min Entry</span><span>Max Players</span><span>Online</span><span></span>
+  </div>
+  <div id="lobbyRows" class="lobby-rows"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var mem={};
+  function store(k,v){try{localStorage.setItem(k,v)}catch(e){mem[k]=v}}
+  function load(k){try{var v=localStorage.getItem(k);return v==null?mem[k]:v}catch(e){return mem[k]}}
+  var $=function(id){return document.getElementById(id)};
+
+  var SUITS=["S","H","D","C"];
+  function isRed(s){return s==="H"||s==="D"}
+  function rlabel(r){return ({14:"A",13:"K",12:"Q",11:"J"})[r]||String(r)}
+  function glyph(s){return ({S:"♠",H:"♥",D:"♦",C:"♣"})[s]}
+  function freshDeck(){var d=[];for(var i=0;i<4;i++)for(var r=2;r<=14;r++)d.push({rank:r,suit:SUITS[i]});return d}
+  function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+
+  // hand ranking — A-2-3 = 2nd-best sequence (below A-K-Q)
+  function evalHand(cards){
+    var rs=cards.map(function(c){return c.rank}).sort(function(a,b){return b-a});
+    var flush=cards[0].suit===cards[1].suit&&cards[1].suit===cards[2].suit;
+    var uniq=new Set(rs).size===3, seq=false, top=rs[0];
+    if(uniq){ if(rs[0]-rs[1]===1&&rs[1]-rs[2]===1){seq=true;top=rs[0];}
+      else if(rs[0]===14&&rs[1]===3&&rs[2]===2){seq=true;top=13.5;} }
+    if(rs[0]===rs[1]&&rs[1]===rs[2]) return {tb:[6,rs[0]],name:"Trail "+rlabel(rs[0])};
+    if(seq&&flush) return {tb:[5,top],name:"Pure Sequence"};
+    if(seq) return {tb:[4,top],name:"Sequence"};
+    if(flush) return {tb:[3].concat(rs),name:"Color"};
+    if(rs[0]===rs[1]||rs[1]===rs[2]){var pr=rs[1],kk=rs[0]===rs[1]?rs[2]:rs[0];return {tb:[2,pr,kk],name:"Pair "+rlabel(pr)};}
+    return {tb:[1].concat(rs),name:"High "+rlabel(rs[0])};
+  }
+  function catOf(cards){return evalHand(cards).tb[0];}
+  function cmp(a,b){for(var i=0;i<Math.max(a.length,b.length);i++){var x=a[i]||0,y=b[i]||0;if(x!==y)return x-y;}return 0;}
+
+  var BOOT=10, CAP=BOOT*128, TURN_SECS=15, WAIT_SECS=30, START_SECS=3, MAXP=4, MINP=2;
+  var BOTS=[{n:"Ravi",a:"🧔"},{n:"Priya",a:"👩"},{n:"Sam",a:"🧑"}];
+  var balance=Number(load("tp4_balance")); if(!isFinite(balance)||balance<=0)balance=1000;
+
+  var seats=[], pot=0, stake=BOOT, cur=0, state="idle", turnLock=false;
+  var timers=[], turnTimer=null, waitIv=null;
+  function clearTimers(){timers.forEach(clearTimeout);timers=[];if(turnTimer){clearInterval(turnTimer);turnTimer=null}if(waitIv){clearInterval(waitIv);waitIv=null}}
+  function setBalance(v){balance=Math.max(0,Math.round(v));store("tp4_balance",String(balance));$("balance").textContent=balance;}
+  function newSeat(n,a,you){return {name:n,av:a,isYou:!!you,joined:!!you,cards:[],seen:false,inRound:false,packed:false,reveal:false,blindTurns:0,betLabel:"",winner:false};}
+
+  // ---------- render ----------
+  function stackHTML(s){
+    if(!s.cards.length) return '<div class="cardstack"></div>';
+    if(s.reveal){ var h='<div class="cardstack">'; s.cards.forEach(function(c){h+='<div class="cm'+(isRed(c.suit)?" red":"")+'">'+rlabel(c.rank)+glyph(c.suit)+'</div>';}); return h+'</div>'; }
+    var b='<div class="cardstack">';for(var k=0;k<3;k++)b+='<div class="cb"></div>';
+    if(s.seen)b+='<div class="seen-badge">SEEN</div>';
+    return b+'</div>';
+  }
+  function betPill(s){ return s.betLabel? '<div class="betpill"><span class="spade">♠</span>'+s.betLabel+'</div>' : '<div class="betpill" style="visibility:hidden"><span class="spade">♠</span>0</div>'; }
+  function renderBotSeat(i){
+    var el=$("seat"+i), s=seats[i]; if(!el)return;
+    if(!s.joined){ el.className="seat seat-p"+i+(i>=2?" right":""); el.innerHTML='<div class="seat-inner"><div class="avatar">🪑</div><div class="cardstack"></div></div><div class="seatcol"><div class="nm">Waiting…</div></div>'; return; }
+    el.className="seat seat-p"+i+(i>=2?" right":"")+(cur===i&&state==="playing"?" turn":"")+(s.packed?" packed":"")+(s.winner?" winner":"");
+    el.innerHTML='<div class="seat-inner"><div class="avatar">'+s.av+'</div>'+stackHTML(s)+'</div>'+
+      '<div class="seatcol"><div class="nm">'+s.name+'</div>'+betPill(s)+'</div>';
+  }
+  function renderYou(){
+    var s=seats[0], yh=$("youhand"); yh.innerHTML="";
+    if(!s.cards.length){ for(var k=0;k<3;k++)yh.appendChild(cardBack()); }
+    else s.cards.forEach(function(c){ yh.appendChild(s.seen?faceCard(c):cardBack()); });
+    $("yourank").textContent=(s.inRound&&s.seen)?evalHand(s.cards).name:"";
+    var showSee = state==="playing" && s.inRound && !s.seen && cur===0;
+    $("seebtn").style.display=showSee?"block":"none";
+  }
+  function cardBack(){var d=document.createElement("div");d.className="cardback";return d;}
+  function faceCard(c){var d=document.createElement("div");d.className="card"+(isRed(c.suit)?" red":"");d.innerHTML='<span class="r">'+rlabel(c.rank)+'</span><span class="s">'+glyph(c.suit)+'</span>';return d;}
+  function render(){ $("pot").textContent=pot; for(var i=1;i<4;i++)renderBotSeat(i); renderYou(); }
+  function msg(t,cls){var m=$("msg");m.className="msg"+(cls?" "+cls:"");m.textContent=t;}
+
+  // ---------- waiting ----------
+  function openTable(){
+    $("lobby").style.display="none";
+    $("game").style.display="block";
+    clearTimers();
+    seats=[newSeat("You","🙂",true)];
+    for(var i=0;i<3;i++)seats.push(newSeat(BOTS[i].n,BOTS[i].a,false));
+    pot=0;stake=BOOT;cur=0;state="waiting";
+    $("barL").innerHTML="";$("barR").innerHTML="";$("turnbadge").textContent="";msg("");
+    render();
+    var remaining=WAIT_SECS, joined=1, started=false;
+    [1000,2400,3800].forEach(function(t,idx){ timers.push(setTimeout(function(){
+      if(started)return; seats[idx+1].joined=true; joined++; render(); showWait(remaining,joined);
+      if(joined>=MINP){started=true;beginStart();}
+    },t)); });
+    waitIv=setInterval(function(){ remaining--; showWait(remaining,joined);
+      if(remaining<=0){ clearInterval(waitIv);waitIv=null;
+        if(joined<MINP){ overlay('<h2>Not enough players</h2><div style="color:#ccc">Returning to table…</div>'); timers.push(setTimeout(openTable,1800)); } }
+    },1000);
+    showWait(remaining,joined);
+  }
+  function showWait(rem,joined){ if(state!=="waiting")return;
+    overlay('<div class="waiting">Waiting for players to join…</div><div class="countbig">'+Math.max(0,rem)+'</div>'+
+      '<div style="color:#bbb;font-size:13px">'+joined+'/'+MAXP+' seated · min '+MINP+' to start</div>'); }
+  function beginStart(){ if(waitIv){clearInterval(waitIv);waitIv=null;} state="starting"; var c=START_SECS;
+    (function tick(){ overlay('<div class="waiting">Game starts in</div><div class="countbig">'+c+'</div>');
+      if(c<=0){hideOverlay();dealRound();return;} c--; timers.push(setTimeout(tick,900)); })(); }
+
+  // ---------- round ----------
+  function dealRound(){
+    clearTimers(); if(balance<BOOT)setBalance(1000);
+    var deck=shuffle(freshDeck());
+    seats.forEach(function(s){ if(s.joined){s.cards=[deck.pop(),deck.pop(),deck.pop()];s.seen=false;s.inRound=true;s.packed=false;s.reveal=false;s.blindTurns=0;s.betLabel="";s.winner=false;} });
+    pot=0;stake=BOOT;state="playing";turnLock=false;
+    seats.forEach(function(s){ if(s.joined){pot+=BOOT;s.betLabel="boot ₹"+BOOT;if(s.isYou)setBalance(balance-BOOT);} });
+    cur=0; msg("Cards dealt · Boot ₹"+BOOT+" each");
+    render(); startTurn();
+  }
+  function activeSeats(){return seats.filter(function(s){return s.joined&&s.inRound&&!s.packed});}
+  function nextSeat(from){for(var st=1;st<=4;st++){var i=(from+st)%4;var s=seats[i];if(s&&s.joined&&s.inRound&&!s.packed)return i;}return from;}
+  function prevSeenSeat(from){for(var st=1;st<=4;st++){var i=(from-st+4)%4;var s=seats[i];if(s&&s.joined&&s.inRound&&!s.packed&&s.seen)return i;}return -1;}
+
+  function startTurn(){
+    if(state!=="playing")return;
+    var act=activeSeats(); if(act.length===1)return endRound(act[0],"last standing");
+    turnLock=false; render();
+    var s=seats[cur];
+    if(s.isYou){ renderActions(); startYourTimer(); }
+    else{ $("barL").innerHTML="";$("barR").innerHTML=""; $("seebtn").style.display="none"; $("turnbadge").textContent=s.name+" is playing…"; timers.push(setTimeout(function(){botAct(s)},800+Math.random()*600)); }
+  }
+  function startYourTimer(){ var left=TURN_SECS; $("turnbadge").textContent="YOUR TURN · "+left+"s";
+    if(turnTimer)clearInterval(turnTimer);
+    turnTimer=setInterval(function(){ left--; $("turnbadge").textContent="YOUR TURN · "+left+"s";
+      if(left<=0){clearInterval(turnTimer);turnTimer=null; if(cur===0&&!turnLock)doPack(seats[0]);} },1000); }
+  function advance(){ if(turnTimer){clearInterval(turnTimer);turnTimer=null;} cur=nextSeat(cur); startTurn(); }
+
+  function doBet(s,raise){
+    if(s.isYou&&turnLock)return; if(s.isYou)turnLock=true;
+    if(raise)stake=Math.min(stake*2,CAP);
+    var amt=(s.seen?2:1)*stake; pot+=amt; if(s.isYou)setBalance(balance-amt);
+    s.betLabel=(s.seen?"₹":"₹")+amt; if(!s.seen)s.blindTurns++;
+    render(); advance();
+  }
+  function doPack(s){ if(s.isYou&&turnLock)return; if(s.isYou)turnLock=true;
+    s.packed=true;s.betLabel="pack"; render();
+    var act=activeSeats(); if(act.length===1)return endRound(act[0],"others packed"); advance(); }
+  function doSee(s){ s.seen=true; render(); if(s.isYou)renderActions(); }
+
+  // ---------- your action bar ----------
+  function renderActions(){
+    var you=seats[0], L=$("barL"), R=$("barR"); L.innerHTML="";R.innerHTML="";
+    var act=activeSeats();
+    function b(par,html,cls,fn,dis){var x=document.createElement("button");x.className="abtn "+cls;x.innerHTML=html;x.disabled=!!dis;x.onclick=function(){if(turnLock)return;fn();};par.appendChild(x);}
+    b(L,"PACK","pack",function(){confirmPack()});
+    if(!you.seen){
+      var prev=prevSeenSeat(0);
+      b(L,"SIDE SHOW","side",function(){},true); // enabled only when seen
+      b(R,'Blind<small>₹'+stake+'</small>',"blind",function(){doBet(you,false)}, balance<stake);
+      b(R,'Blind<small>₹'+(2*stake)+'</small>',"blind",function(){doBet(you,true)}, balance<2*stake);
+    } else {
+      var prev2=prevSeenSeat(0);
+      if(act.length===2){ b(L,'SHOW<small>₹'+(2*stake)+'</small>',"show",function(){youShow()}, balance<2*stake); }
+      else { b(L,"SIDE SHOW","side",function(){youSideShow(prev2)}, prev2<0||balance<2*stake); }
+      b(R,'Chaal<small>₹'+(2*stake)+'</small>',"chaal",function(){doBet(you,false)}, balance<2*stake);
+      b(R,'Raise<small>₹'+(4*stake)+'</small>',"chaal",function(){doBet(you,true)}, balance<4*stake);
+    }
+  }
+  function confirmPack(){ overlay('<h2>Pack this hand?</h2><div class="btnrow"><button class="mbtn ghost" id="mC">Cancel</button><button class="mbtn red" id="mP">Pack</button></div>');
+    $("mC").onclick=hideOverlay; $("mP").onclick=function(){hideOverlay();doPack(seats[0]);}; }
+
+  // ---------- side show ----------
+  function youSideShow(prevIdx){ if(prevIdx<0)return; turnLock=true;
+    pot+=2*stake; setBalance(balance-2*stake);
+    var opp=seats[prevIdx], accept=(catOf(opp.cards)>=3?Math.random()<0.5:Math.random()<0.75);
+    if(accept){ opp.reveal=true; seats[0].reveal=true; render();
+      var youWin=cmp(evalHand(seats[0].cards).tb,evalHand(opp.cards).tb)>0, loser=youWin?opp:seats[0]; loser.packed=true;
+      overlay('<h2>Side Show</h2><div class="reveal">'+rev("You",seats[0])+rev(opp.name,opp)+'</div><div class="'+(youWin?"win":"lose")+'" style="font-weight:800">'+(youWin?opp.name+" packs":"You pack")+'</div><div class="btnrow"><button class="mbtn" id="mO">OK</button></div>');
+      $("mO").onclick=function(){hideOverlay();var a=activeSeats();if(a.length===1)return endRound(a[0],"side-show");advance();};
+    } else { render();
+      overlay('<h2>Side Show</h2><div>'+opp.name+' <b>rejected</b> your request.</div><div class="btnrow"><button class="mbtn" id="mO">OK</button></div>');
+      $("mO").onclick=function(){hideOverlay();advance();}; }
+  }
+  function botSideShow(bot,prevIdx){ var target=seats[prevIdx]; pot+=2*stake; bot.betLabel="side ₹"+(2*stake);
+    if(target.isYou){
+      overlay('<h2>Side Show Request</h2><div>'+bot.name+' wants to compare cards with you.</div><div class="btnrow"><button class="mbtn ghost" id="mR">Reject</button><button class="mbtn" id="mA">Accept</button></div>');
+      $("mR").onclick=function(){hideOverlay();render();advance();};
+      $("mA").onclick=function(){ hideOverlay(); bot.reveal=true;seats[0].reveal=true;render();
+        var botWin=cmp(evalHand(bot.cards).tb,evalHand(seats[0].cards).tb)>0, loser=botWin?seats[0]:bot; loser.packed=true;
+        overlay('<h2>Side Show</h2><div class="reveal">'+rev(bot.name,bot)+rev("You",seats[0])+'</div><div class="'+(botWin?"lose":"win")+'" style="font-weight:800">'+(botWin?"You pack":bot.name+" packs")+'</div><div class="btnrow"><button class="mbtn" id="mO">OK</button></div>');
+        $("mO").onclick=function(){hideOverlay();var a=activeSeats();if(a.length===1)return endRound(a[0],"side-show");advance();};
+      };
+    } else { var bWin=cmp(evalHand(bot.cards).tb,evalHand(target.cards).tb)>0, loser=bWin?target:bot; loser.packed=true;
+      msg(bot.name+" side-showed "+target.name+" — "+loser.name+" packs"); render();
+      var a=activeSeats(); if(a.length===1)return endRound(a[0],"side-show"); advance(); }
+  }
+
+  // ---------- show ----------
+  function youShow(){ turnLock=true; pot+=2*stake; setBalance(balance-2*stake); showdown(); }
+  function showdown(){ state="showdown"; var act=activeSeats(); act.forEach(function(s){s.reveal=true;});
+    var best=act[0]; for(var i=1;i<act.length;i++)if(cmp(evalHand(act[i].cards).tb,evalHand(best.cards).tb)>0)best=act[i];
+    render(); endRound(best,"show"); }
+
+  // ---------- bots ----------
+  function botAct(bot){
+    if(state!=="playing"||!bot.inRound||bot.packed)return;
+    var act=activeSeats();
+    if(!bot.seen&&(bot.blindTurns>=2||(bot.blindTurns>=1&&Math.random()<0.5)))bot.seen=true;
+    if(bot.seen){
+      var strong=catOf(bot.cards);
+      if(act.length===2){ if(strong>=4||(strong>=2&&Math.random()<0.5)){pot+=2*stake;return showdown();}
+        if(strong<=1&&Math.random()<0.6)return doPack(bot); }
+      var prev=prevSeenSeat(cur);
+      if(prev>=0&&act.length>2&&strong>=3&&Math.random()<0.22&&stake<CAP/2)return botSideShow(bot,prev);
+      if(strong<=1&&stake>BOOT*4&&Math.random()<0.7)return doPack(bot);
+      if(strong===2&&stake>BOOT*16&&Math.random()<0.5)return doPack(bot);
+      return doBet(bot, strong>=3&&stake<CAP/2&&Math.random()<0.45);
+    } else {
+      if(stake>BOOT*8&&Math.random()<0.4)return doPack(bot);
+      return doBet(bot, stake<CAP/2&&Math.random()<0.18);
+    }
+  }
+
+  // ---------- result ----------
+  function rev(name,s){ var c='';for(var k=0;k<3;k++){var x=s.cards[k];c+='<div class="card'+(isRed(x.suit)?" red":"")+'"><span class="r">'+rlabel(x.rank)+'</span><span class="s">'+glyph(x.suit)+'</span></div>';}
+    return '<div class="rev"><div class="rn">'+name+'</div><div class="cards">'+c+'</div><div class="rk">'+evalHand(s.cards).name+'</div></div>'; }
+  function endRound(winner,reason){
+    if(state==="finished")return; state="finished"; clearTimers();
+    $("barL").innerHTML="";$("barR").innerHTML="";$("turnbadge").textContent="";$("seebtn").style.display="none";
+    activeSeats().forEach(function(s){s.reveal=true;}); winner.winner=true;winner.reveal=true;
+    var youWon=winner.isYou; if(youWon)setBalance(balance+pot); render();
+    var reveals=seats.filter(function(s){return s.joined&&s.inRound&&!s.packed}).map(function(s){return rev(s.isYou?"You":s.name,s)}).join("");
+    overlay('<h2 class="'+(youWon?"win":"lose")+'">'+(youWon?"YOU WIN 🎉":"YOU LOST")+'</h2>'+
+      '<div class="amt '+(youWon?"win":"lose")+'">'+(youWon?"+":"−")+'₹'+pot+'</div>'+
+      '<div style="font-size:12px;color:#ccc">'+(youWon?"You":winner.name)+' won with '+evalHand(winner.cards).name+'</div>'+
+      '<div class="reveal">'+reveals+'</div><div class="btnrow"><button class="mbtn" id="mN">CONTINUE ▶</button></div>');
+    $("mN").onclick=function(){hideOverlay();dealRound();};
+  }
+
+  // ---------- overlay ----------
+  function overlay(inner){ hideOverlay(); var o=document.createElement("div");o.className="overlay";o.id="ov";o.innerHTML='<div class="modal">'+inner+'</div>';$("game").appendChild(o); }
+  function hideOverlay(){var o=$("ov");if(o)o.remove();}
+
+  // ================= online mode: real WebSocket table =================
+  // Everything above this line is the original local bot-simulation — untouched,
+  // and still exactly what runs whenever there's no server configured or it can't
+  // be reached. Below is the network layer that takes over when it can.
+  function randId(){ return Math.random().toString(36).slice(2,10); }
+
+  var NET = {
+    serverUrl: (load("tp_server_url") == null ? "https://deals-rummy-backend.onrender.com" : load("tp_server_url")),
+    token: load("tp_token") || null,
+    tokenAt: Number(load("tp_token_at")) || 0,
+    email: load("tp_email") || null,
+    password: load("tp_password") || null,
+  };
+  function saveNet(){
+    store("tp_server_url", NET.serverUrl || "");
+    if(NET.token) store("tp_token", NET.token);
+    if(NET.tokenAt) store("tp_token_at", String(NET.tokenAt));
+    if(NET.email) store("tp_email", NET.email);
+    if(NET.password) store("tp_password", NET.password);
+  }
+
+  var online=false, ws=null, myId=null, onlineState=null, onlineHand=[];
+  var pendingSideShowRequester=null, onlineTurnSeconds=15;
+  var onlineTurnTimer=null, onlineTurnSeatTracked=undefined;
+  var onlineWaitTimer=null;
+
+  function ensureGuestCreds(){
+    if(!NET.email || !NET.password){
+      var id=randId();
+      NET.email="guest-"+id+"@teenpatti-guest.com";
+      NET.password="g"+randId()+randId();
+      saveNet();
+    }
+  }
+  async function apiFetch(path,opts){
+    opts=opts||{};
+    var headers=Object.assign({"Content-Type":"application/json"},opts.headers||{});
+    if(NET.token) headers["Authorization"]="Bearer "+NET.token;
+    return fetch(NET.serverUrl+path, Object.assign({},opts,{headers:headers}));
+  }
+  async function login(){
+    var res=await apiFetch("/api/v1/auth/login",{method:"POST",body:JSON.stringify({email:NET.email,password:NET.password})});
+    if(!res.ok) return false;
+    var data=await res.json();
+    NET.token=data.access_token; NET.tokenAt=Date.now(); saveNet();
+    return true;
+  }
+  async function ensureAuth(){
+    ensureGuestCreds();
+    if(NET.token && (Date.now()-NET.tokenAt) < 50*60*1000) return true;
+    if(await login()) return true;
+    var reg=await apiFetch("/api/v1/auth/register",{method:"POST",body:JSON.stringify({
+      email:NET.email, username:"guest"+randId(), password:NET.password, is_18_plus:false,
+    })});
+    if(!reg.ok && reg.status!==409) return false;
+    return await login();
+  }
+  async function findOrCreateTableForTier(mode,boot){
+    var listRes=await apiFetch("/api/v1/teen-patti/tables");
+    if(listRes.ok){
+      var list=await listRes.json();
+      var open=list.find(function(t){return t.mode===mode && t.boot_amount===boot && t.online_players<t.max_players;});
+      if(open){ onlineTurnSeconds=open.turn_seconds||15; return open.id; }
+    }
+    var createRes=await apiFetch("/api/v1/teen-patti/tables",{method:"POST",body:JSON.stringify({
+      name:"Teen Patti", mode:mode, max_players:4, boot_amount:boot, turn_seconds:TURN_SECS,
+    })});
+    if(!createRes.ok) throw new Error("could not create table");
+    var created=await createRes.json();
+    onlineTurnSeconds=created.turn_seconds||TURN_SECS;
+    return created.id;
+  }
+  async function fetchBalance(){
+    var res=await apiFetch("/api/v1/wallet");
+    if(!res.ok) return;
+    var w=await res.json();
+    setBalance(w.virtual_chips);
+  }
+
+  function loadRazorpayScript(){
+    return new Promise(function(resolve){
+      if(window.Razorpay) return resolve(true);
+      var s=document.createElement("script");
+      s.src="https://checkout.razorpay.com/v1/checkout.js";
+      s.onload=function(){resolve(true);};
+      s.onerror=function(){resolve(false);};
+      document.body.appendChild(s);
+    });
+  }
+  // Same real-cash flow as the Rummy Wallet page: create a Razorpay order via
+  // /payments/deposit, open the Razorpay checkout, and let the webhook (not this
+  // handler) do the actual crediting. Credits real_paise, not the virtual_chips
+  // shown on this table — separate wallet buckets, same as Rummy.
+  async function addCashOnline(){
+    var amtStr=window.prompt("Add how much? (₹)","500");
+    if(amtStr===null) return;
+    var rupees=Math.max(1,Math.round(Number(amtStr)||0));
+    if(!rupees){ msg("Enter a valid amount","lose"); return; }
+    msg("Opening payment…");
+    try{
+      var res=await apiFetch("/api/v1/payments/deposit",{method:"POST",body:JSON.stringify({amount_paise:rupees*100})});
+      var order=await res.json();
+      if(!res.ok){
+        var detail=order&&order.detail;
+        msg(detail&&detail.indexOf("disabled")>=0 ? "Real money isn't enabled yet."
+            : detail || "Could not start the payment.", "lose");
+        return;
+      }
+      if(!(await loadRazorpayScript()) || !window.Razorpay){
+        msg("Could not load the payment provider. Check your connection.","lose");
+        return;
+      }
+      msg("");
+      new window.Razorpay({
+        key:order.razorpay_key_id,
+        amount:order.amount_paise,
+        currency:order.currency,
+        name:"Teen Patti",
+        description:"Add cash to wallet",
+        order_id:order.razorpay_order_id,
+        handler:function(){ setTimeout(fetchBalance,2000); },
+        theme:{color:"#d4af37"}
+      }).open();
+    }catch(e){
+      msg("Could not start the payment. Please try again.","lose");
+    }
+  }
+
+  // ---------- lobby (table list, before joining) ----------
+  // Practice boots are plain virtual chips; Points boots are paise (TableCreate's
+  // boot_amount is "chips (virtual) or paise (real)" — see app/teen_patti/schemas.py).
+  // The ₹ values mirror the reference lobby's Teen Patti tier list exactly.
+  var PRACTICE_TIERS=[10,30,100,200,500];
+  var POINTS_TIERS=[30,50,100,300,1000,2000,5000]; // ₹0.3, ₹0.5, ₹1, ₹3, ₹10, ₹20, ₹50
+  var lobbyMode="virtual";
+
+  function tierLabel(mode,boot){ return mode==="virtual" ? (boot+" chips") : ("₹"+(boot/100)); }
+
+  async function showLobby(){
+    $("game").style.display="none";
+    $("lobby").style.display="block";
+    $("lobbyRows").innerHTML='<div class="lobby-empty">Loading tables…</div>';
+    if(!(await ensureAuth())){ $("lobbyRows").innerHTML='<div class="lobby-empty">Could not connect. Check your server.</div>'; return; }
+    await refreshLobbyData();
+  }
+  async function refreshLobbyData(){
+    var wallet=null, tables=[];
+    try{ var wr=await apiFetch("/api/v1/wallet"); if(wr.ok) wallet=await wr.json(); }catch(e){}
+    try{ var tr=await apiFetch("/api/v1/teen-patti/tables"); if(tr.ok) tables=await tr.json(); }catch(e){}
+    if(wallet){ $("lobbyBalance").textContent = lobbyMode==="virtual" ? wallet.virtual_chips : wallet.real_paise; }
+    renderLobbyRows(wallet,tables);
+  }
+  function renderLobbyRows(wallet,tables){
+    var tiers = lobbyMode==="virtual" ? PRACTICE_TIERS : POINTS_TIERS;
+    var haveBalance = wallet ? (lobbyMode==="virtual" ? wallet.virtual_chips : wallet.real_paise) : 0;
+    $("lobbyRows").innerHTML = tiers.map(function(boot){
+      var online = tables.filter(function(t){return t.mode===lobbyMode && t.boot_amount===boot;})
+        .reduce(function(sum,t){return sum+t.online_players;},0);
+      var label = tierLabel(lobbyMode,boot);
+      var canAfford = haveBalance >= boot;
+      // Practice is free chips — never gated behind Add Cash, only Points is.
+      var btnHtml = (lobbyMode==="virtual" || canAfford)
+        ? '<button class="mbtn lobby-play" data-boot="'+boot+'">Play Now</button>'
+        : '<button class="mbtn red lobby-add">Add Cash</button>';
+      return '<div class="lobby-row"><span>'+label+'</span><span>'+label+'</span>'
+        +'<span>4</span><span>'+online+'</span>'+btnHtml+'</div>';
+    }).join("");
+    var rows=$("lobbyRows");
+    Array.prototype.forEach.call(rows.querySelectorAll(".lobby-play"),function(b){
+      b.onclick=function(){ joinTier(lobbyMode,Number(b.getAttribute("data-boot"))); };
+    });
+    Array.prototype.forEach.call(rows.querySelectorAll(".lobby-add"),function(b){
+      b.onclick=function(){ addCashOnline().then(refreshLobbyData); };
+    });
+  }
+  function switchLobbyTab(mode){
+    lobbyMode=mode;
+    $("tabPractice").className="lobby-tab"+(mode==="virtual"?" active":"");
+    $("tabPoints").className="lobby-tab"+(mode==="real"?" active":"");
+    refreshLobbyData();
+  }
+  // Reconnecting to an already-known table — used both for a fresh Play Now
+  // and for resuming the table a page reload would otherwise have dropped
+  // (see the "tp_current_table" resume check in startGame()).
+  async function connectToTable(tableId){
+    $("lobby").style.display="none";
+    $("game").style.display="block";
+    try{
+      overlay('<div class="waiting">Connecting…</div>');
+      if(!(await ensureAuth())) throw new Error("auth failed");
+      var meRes=await apiFetch("/api/v1/auth/me");
+      if(!meRes.ok) throw new Error("me failed");
+      var me=await meRes.json();
+      myId=me.id;
+      store("tp_current_table", tableId);
+      openSocket(tableId);
+    }catch(e){
+      store("tp_current_table","");
+      goOffline();
+    }
+  }
+  async function joinTier(mode,boot){
+    try{
+      var tableId=await findOrCreateTableForTier(mode,boot);
+      await connectToTable(tableId);
+    }catch(e){
+      $("lobby").style.display="none"; $("game").style.display="block";
+      goOffline();
+    }
+  }
+  function openSocket(tableId){
+    var wsBase=NET.serverUrl.replace(/^http/,"ws");
+    var sock=new WebSocket(wsBase+"/ws/teen-patti/"+tableId+"?token="+encodeURIComponent(NET.token));
+    ws=sock;
+    online=true; onlineTurnSeatTracked=undefined;
+    sock.onopen=function(){ fetchBalance(); };
+    sock.onmessage=function(ev){ try{ handleServerMessage(JSON.parse(ev.data)); }catch(e){} };
+    // Only react if `sock` is still the active socket — a superseded socket's
+    // belated close event (e.g. after startGame() already opened a new one) must
+    // not tear down a healthy newer connection.
+    sock.onclose=function(){ if(ws===sock && online){ online=false; goOffline(); } };
+  }
+  function goOffline(){
+    online=false; clearOnlineTimer(); clearOnlineWaitTimer();
+    hideOverlay();
+    if(ws){ try{ws.close();}catch(e){} ws=null; }
+    openTable();
+  }
+  function sendAction(a){
+    if(!ws || ws.readyState!==1) return;
+    a.action_id=randId()+randId();
+    ws.send(JSON.stringify(a));
+  }
+
+  function handleServerMessage(m){
+    if(m.type==="state"){ onlineState=m.state; renderOnline(); }
+    else if(m.type==="hand"){ onlineHand=m.cards||[]; renderOnline(); }
+    else if(m.type==="event"){ handleServerEvent(m); }
+    else if(m.type==="error"){ msg(m.message,"lose"); }
+  }
+  function handleServerEvent(e){
+    if(e.event==="joined"){ showOnlineWaiting(20); }
+    else if(e.event==="starting"){ clearOnlineWaitTimer(); overlay('<div class="waiting">Game starts in</div><div class="countbig">'+e.seconds+'</div>'); }
+    else if(e.event==="hand_started"){ clearOnlineWaitTimer(); hideOverlay(); }
+    else if(e.event==="side_show_request"){ pendingSideShowRequester=e.requester; showSideShowRequestModal(); }
+    else if(e.event==="hand_over"){ fetchBalance(); showOnlineHandOverOverlay(e); }
+  }
+
+  function showOnlineWaiting(seconds){
+    clearOnlineWaitTimer();
+    var left=seconds;
+    overlay('<div class="waiting">Waiting for players to join…</div><div class="countbig">'+left+'</div>');
+    onlineWaitTimer=setInterval(function(){
+      left--; if(left<0){clearOnlineWaitTimer();return;}
+      var el=document.querySelector(".countbig"); if(el)el.textContent=left;
+    },1000);
+  }
+  function clearOnlineWaitTimer(){ if(onlineWaitTimer){clearInterval(onlineWaitTimer);onlineWaitTimer=null;} }
+
+  function myOnlineSeat(){ if(!onlineState) return null; return onlineState.seats.find(function(s){return s.id===myId;})||null; }
+  function orderedOnlineSeats(){
+    if(!onlineState) return [];
+    var seats=onlineState.seats, myIdx=seats.findIndex(function(s){return s.id===myId;});
+    if(myIdx<0) return seats;
+    var rotated=[]; for(var i=0;i<seats.length;i++) rotated.push(seats[(myIdx+i)%seats.length]);
+    return rotated;
+  }
+  function onlineStackHTML(s){
+    if(!s.card_count) return '<div class="cardstack"></div>';
+    if(s.cards){ var h='<div class="cardstack">'; s.cards.forEach(function(c){h+='<div class="cm'+(isRed(c.suit)?" red":"")+'">'+rlabel(c.rank)+glyph(c.suit)+'</div>';}); return h+'</div>'; }
+    var b='<div class="cardstack">'; for(var k=0;k<3;k++)b+='<div class="cb"></div>';
+    if(s.seen)b+='<div class="seen-badge">SEEN</div>';
+    return b+'</div>';
+  }
+  function betPillFor(label){ return label? '<div class="betpill"><span class="spade">♠</span>'+label+'</div>' : '<div class="betpill" style="visibility:hidden"><span class="spade">♠</span>0</div>'; }
+
+  function renderOnline(){
+    if(!onlineState) return;
+    var ordered=orderedOnlineSeats(), me=ordered.length?ordered[0]:myOnlineSeat();
+    $("pot").textContent=onlineState.pot;
+
+    for(var i=1;i<4;i++){
+      var el=$("seat"+i), s=ordered[i];
+      if(!el) continue;
+      if(!s){ el.className="seat seat-p"+i+(i>=2?" right":""); el.innerHTML='<div class="seat-inner"><div class="avatar">🪑</div><div class="cardstack"></div></div><div class="seatcol"><div class="nm">Waiting…</div></div>'; continue; }
+      el.className="seat seat-p"+i+(i>=2?" right":"")+(onlineState.turn===s.id&&onlineState.phase==="playing"?" turn":"")+(s.packed?" packed":"")+(s.winner?" winner":"");
+      el.innerHTML='<div class="seat-inner"><div class="avatar">'+(s.is_bot?"🧑":"🙂")+'</div>'+onlineStackHTML(s)+'</div>'+
+        '<div class="seatcol"><div class="nm">'+s.name+'</div>'+betPillFor(s.bet_label)+'</div>';
+    }
+
+    var yh=$("youhand"); yh.innerHTML="";
+    var revealedMine = me && (me.cards || (me.seen && onlineHand.length));
+    if(revealedMine){ (me.cards||onlineHand).forEach(function(c){ yh.appendChild(faceCard(c)); }); }
+    else { for(var k=0;k<3;k++) yh.appendChild(cardBack()); }
+    $("yourank").textContent=(me&&me.seen&&onlineHand.length)?evalHand(onlineHand).name:"";
+    var showSee=onlineState.phase==="playing" && me && onlineState.turn===me.id && !me.seen;
+    $("seebtn").style.display=showSee?"block":"none";
+
+    if(onlineState.phase==="playing" && me && onlineState.turn===me.id){
+      renderOnlineActions(me);
+    } else {
+      $("barL").innerHTML=""; $("barR").innerHTML="";
+      if(onlineState.phase==="playing" && onlineState.turn){
+        var turnSeat=onlineState.seats.find(function(s){return s.id===onlineState.turn;});
+        $("turnbadge").textContent = turnSeat ? (turnSeat.id===myId?"YOUR TURN":turnSeat.name+" is playing…") : "";
+      } else { $("turnbadge").textContent=""; }
+    }
+    maybeStartOnlineTimer(me);
+  }
+
+  function renderOnlineActions(me){
+    var L=$("barL"), R=$("barR"); L.innerHTML="";R.innerHTML="";
+    function b(par,html,cls,fn,dis){var x=document.createElement("button");x.className="abtn "+cls;x.innerHTML=html;x.disabled=!!dis;x.onclick=fn;par.appendChild(x);}
+    var stake=onlineState.stake;
+    var activeCount=onlineState.seats.filter(function(s){return s.in_round&&!s.packed;}).length;
+    var othersSeen=onlineState.seats.some(function(s){return s.id!==me.id && s.seen && !s.packed && s.in_round;});
+    b(L,"PACK","pack",function(){ sendAction({action:"pack"}); });
+    if(!me.seen){
+      b(L,"SIDE SHOW","side",function(){},true);
+      b(R,'Blind<small>₹'+stake+'</small>',"blind",function(){ sendAction({action:"bet",raise:false}); }, balance<stake);
+      b(R,'Blind<small>₹'+(2*stake)+'</small>',"blind",function(){ sendAction({action:"bet",raise:true}); }, balance<2*stake);
+    } else {
+      if(activeCount===2){ b(L,'SHOW<small>₹'+(2*stake)+'</small>',"show",function(){ sendAction({action:"show"}); }, balance<2*stake); }
+      else { b(L,"SIDE SHOW","side",function(){ sendAction({action:"side_show"}); }, !othersSeen||balance<2*stake); }
+      b(R,'Chaal<small>₹'+(2*stake)+'</small>',"chaal",function(){ sendAction({action:"bet",raise:false}); }, balance<2*stake);
+      b(R,'Raise<small>₹'+(4*stake)+'</small>',"chaal",function(){ sendAction({action:"bet",raise:true}); }, balance<4*stake);
+    }
+  }
+
+  function maybeStartOnlineTimer(me){
+    if(!onlineState || onlineState.phase!=="playing"){ clearOnlineTimer(); return; }
+    if(onlineState.turn===onlineTurnSeatTracked) return;
+    onlineTurnSeatTracked=onlineState.turn;
+    clearOnlineTimer();
+    if(me && onlineState.turn===me.id){
+      var left=onlineTurnSeconds;
+      $("turnbadge").textContent="YOUR TURN · "+left+"s";
+      onlineTurnTimer=setInterval(function(){
+        left--; if(left<0){clearOnlineTimer();return;}
+        $("turnbadge").textContent="YOUR TURN · "+left+"s";
+      },1000);
+    }
+  }
+  function clearOnlineTimer(){ if(onlineTurnTimer){clearInterval(onlineTurnTimer);onlineTurnTimer=null;} }
+
+  function showSideShowRequestModal(){
+    if(!pendingSideShowRequester||!onlineState) return;
+    var r=onlineState.seats.find(function(s){return s.id===pendingSideShowRequester;});
+    var reqName=r?r.name:"Opponent";
+    overlay('<h2>Side Show Request</h2><div>'+reqName+' wants to compare cards with you.</div><div class="btnrow"><button class="mbtn ghost" id="mR">Reject</button><button class="mbtn" id="mA">Accept</button></div>');
+    $("mR").onclick=function(){ hideOverlay(); sendAction({action:"side_show_respond",accept:false}); pendingSideShowRequester=null; };
+    $("mA").onclick=function(){ hideOverlay(); sendAction({action:"side_show_respond",accept:true}); pendingSideShowRequester=null; };
+  }
+
+  function showOnlineHandOverOverlay(e){
+    if(!onlineState) return;
+    var me=myOnlineSeat();
+    var winner=(onlineState.winner_seat!=null)?onlineState.seats[onlineState.winner_seat]:null;
+    var youWon=!!(me&&winner&&winner.id===me.id);
+    var reveals=onlineState.seats.filter(function(s){return s.in_round&&!s.packed&&s.cards;})
+      .map(function(s){return rev(s.id===myId?"You":s.name,{cards:s.cards});}).join("");
+    overlay('<h2 class="'+(youWon?"win":"lose")+'">'+(youWon?"YOU WIN 🎉":"HAND OVER")+'</h2>'+
+      '<div class="amt '+(youWon?"win":"lose")+'">Pot ₹'+onlineState.pot+'</div>'+
+      '<div style="font-size:12px;color:#ccc">'+(winner?(winner.id===myId?"You":winner.name):"?")+' won'+'</div>'+
+      '<div class="reveal">'+reveals+'</div><div class="btnrow"><button class="mbtn" id="mN">OK</button></div>');
+    $("mN").onclick=hideOverlay;
+  }
+
+  function startGame(){
+    clearTimers();               // stop any running local-simulation timers
+    clearOnlineTimer(); clearOnlineWaitTimer();
+    if(ws){ try{ws.close();}catch(e){} ws=null; }
+    online=false;
+    if(NET.serverUrl){
+      // Resume the table a page reload would otherwise have silently dropped
+      // (the WebSocket itself never survives a reload — this is what makes a
+      // refresh land back in the same table instead of always the lobby).
+      // Only set while actually seated; confirmLeave()'s "Yes" clears it.
+      var resumeId=load("tp_current_table");
+      if(resumeId){ connectToTable(resumeId); } else { showLobby(); }
+    } else {
+      openTable(); // offline: straight into the local bot table, nothing for a lobby to list
+    }
+  }
+
+  // Same "Leave Table" confirmation as the Rummy GameTable back button — the back
+  // arrow used to call startGame() directly, silently abandoning a hand in
+  // progress with no warning.
+  function confirmLeave(){
+    overlay('<h2>Leave Table</h2><div>Are you sure you want to leave the table?</div>'
+      +'<div class="btnrow"><button class="mbtn ghost" id="mC">No</button><button class="mbtn red" id="mL">Yes</button></div>');
+    $("mC").onclick=hideOverlay;
+    $("mL").onclick=function(){hideOverlay();store("tp_current_table","");startGame();};
+  }
+
+  // ---------- buttons ----------
+  $("seebtn").onclick=function(){
+    if(online){ sendAction({action:"see"}); return; }
+    if(cur===0&&!seats[0].seen&&state==="playing")doSee(seats[0]);
+  };
+  $("btnAdd").onclick=function(){ if(online){ addCashOnline(); return; } setBalance(balance+500); };
+  $("btnBack").onclick=function(){ confirmLeave(); };
+  $("tabPractice").onclick=function(){ switchLobbyTab("virtual"); };
+  $("tabPoints").onclick=function(){ switchLobbyTab("real"); };
+  $("btnServer").onclick=function(){
+    var next=window.prompt("Server URL (blank = play offline)", NET.serverUrl||"");
+    if(next===null) return;
+    NET.serverUrl=next.trim().replace(/\/$/,"");
+    saveNet();
+    startGame();
+  };
+  $("btnRank").onclick=function(){ overlay('<h2>Hand Ranking</h2><div class="rank-list">1. <b>Trail</b> (AAA…222)<br>2. <b>Pure Sequence</b> (A‑K‑Q &gt; A‑2‑3 &gt; …)<br>3. <b>Sequence</b><br>4. <b>Color</b><br>5. <b>Pair</b><br>6. <b>High Card</b></div><div class="btnrow"><button class="mbtn" id="mO">OK</button></div>'); $("mO").onclick=hideOverlay; };
+  $("btnInfo").onclick=function(){ overlay('<h2>How to play</h2><div style="font-size:13px;line-height:1.6;max-width:300px">Boot ₹'+BOOT+' each. Play <b>Blind</b> or tap <b>See</b>. Seen players pay double (Chaal). <b>Raise</b> doubles the stake. <b>Side Show</b> compares with the previous seen player. When 2 remain, <b>Show</b> decides the winner.</div><div class="btnrow"><button class="mbtn" id="mO">OK</button></div>'); $("mO").onclick=hideOverlay; };
+
+  setBalance(balance);
+  startGame();
+})();
+</script>
+</body>
+</html>

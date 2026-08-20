@@ -1,0 +1,58 @@
+name: Andar Bahar APK
+
+# Builds an installable Android APK in CI (where Google's Android repos are reachable).
+# Download it from the run's "Artifacts" section. Trigger manually or on push to the app.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "andar-bahar/**"
+      - ".github/workflows/andar-bahar-apk.yml"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: andar-bahar
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: andar-bahar/package-lock.json
+
+      - name: Install & build web
+        run: |
+          npm ci || npm install
+          npm run build
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: andar-bahar-debug-apk
+          path: andar-bahar/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

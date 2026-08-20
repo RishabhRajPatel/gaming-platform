@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Andar Bahar</string>
+    <string name="title_activity_main">Andar Bahar</string>
+    <string name="package_name">com.swayatra.andarbahar</string>
+    <string name="custom_url_scheme">com.swayatra.andarbahar</string>
+</resources>

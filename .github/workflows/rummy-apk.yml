@@ -1,0 +1,83 @@
+name: Rummy APK
+
+# Builds the release-signed Android app bundle + APK for the Rummy TWA (wraps the
+# deployed https://frontend-two-alpha-49.vercel.app PWA) using Bubblewrap, reusing
+# the app's existing signing key so Play Store updates keep matching the already
+# published listing. Mirrors teen-patti-apk.yml / andar-bahar-apk.yml: nothing
+# about the generated Android project is committed, only the small manifest that
+# describes it (rummy/android-twa/twa-manifest.json) — CI regenerates the rest
+# fresh every run via `bubblewrap update`.
+#
+# Required repo secrets (Settings > Secrets and variables > Actions), all taken
+# from rummy/android-twa/signing-key-info.txt (never commit that file):
+#   RUMMY_KEYSTORE_BASE64    - output of `base64 -w0 rummy/android-twa/signing.keystore`
+#   RUMMY_KEYSTORE_PASSWORD  - "Key store password" from signing-key-info.txt
+#   RUMMY_KEY_PASSWORD       - "Key password" from signing-key-info.txt
+#
+# CI does NOT bump appVersionCode/appVersionName — bump those in twa-manifest.json
+# yourself before a push you intend to actually upload to the Play Store, the same
+# way you would for any other release.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "rummy/android-twa/twa-manifest.json"
+      - ".github/workflows/rummy-apk.yml"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rummy/android-twa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
+
+      - name: Point Bubblewrap at the JDK/SDK setup-java and setup-android just installed
+        # Without this, the very first `bubblewrap` invocation on a fresh runner drops
+        # into an interactive "install a JDK/SDK for me?" prompt and hangs forever in CI.
+        run: |
+          mkdir -p "$HOME/.bubblewrap"
+          cat > "$HOME/.bubblewrap/config.json" <<EOF
+          {"jdkPath": "$JAVA_HOME", "androidSdkPath": "$ANDROID_HOME"}
+          EOF
+
+      - name: Restore signing key
+        run: echo "${{ secrets.RUMMY_KEYSTORE_BASE64 }}" | base64 -d > signing.keystore
+
+      - name: Regenerate the Android project from twa-manifest.json
+        run: bubblewrap update --skipVersionUpgrade --directory=. --manifest=./twa-manifest.json
+
+      - name: Build + sign the APK and App Bundle
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.RUMMY_KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.RUMMY_KEY_PASSWORD }}
+        run: bubblewrap build
+
+      - name: Upload APK + App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: rummy-release-bundle
+          path: |
+            rummy/android-twa/app-release-signed.apk
+            rummy/android-twa/app-release-bundle.aab
+          if-no-files-found: error

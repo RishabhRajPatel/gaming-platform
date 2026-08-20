@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+<title>Teen Patti</title>
+<style>
+  :root{--felt-1:#0b3d2e;--felt-2:#072a20;--gold:#e8c37a;--gold-2:#d4af37;--ink:#0a0c10;
+    --blue:#2f6df6;--red:#f6653e;--green:#31c46b}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:#f4f6f8;
+    background:radial-gradient(circle at 50% -8%,var(--felt-1),var(--felt-2) 55%,var(--ink));
+    -webkit-user-select:none;user-select:none;overflow:hidden}
+  .app{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto;
+    padding:calc(env(safe-area-inset-top) + 8px) 12px 12px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:4px 2px 6px}
+  .brand{font-weight:800;font-size:22px;
+    background:linear-gradient(90deg,var(--gold),#fff3d6,var(--gold-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .balance{font-weight:800;background:rgba(0,0,0,.35);border:1px solid rgba(232,195,122,.45);
+    padding:6px 13px;border-radius:999px;font-size:15px;transition:transform .2s}
+  .balance.bump{transform:scale(1.15)}
+  .balance small{color:var(--gold)}
+  .table{flex:1;display:flex;flex-direction:column;min-height:0;gap:6px}
+  .pot{text-align:center;font-weight:800;color:var(--gold);font-size:15px;margin:2px 0}
+  .pot .stake{color:rgba(255,255,255,.55);font-size:12px;font-weight:600}
+  .opponents{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .seat{background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.08);border-radius:12px;
+    padding:7px 4px;text-align:center;position:relative;transition:.2s}
+  .seat.turn{outline:2px solid var(--gold);box-shadow:0 0 16px rgba(232,195,122,.35)}
+  .seat.packed{opacity:.4}
+  .seat.winner{outline:2px solid var(--green);box-shadow:0 0 18px rgba(49,196,107,.5)}
+  .seat .nm{font-weight:700;font-size:12px}
+  .seat .st{font-size:10px;color:rgba(255,255,255,.6);min-height:12px}
+  .seat .tag{display:inline-block;font-size:9px;padding:1px 6px;border-radius:999px;margin-top:3px;font-weight:700}
+  .tag.blind{background:rgba(47,109,246,.2);color:#9dbcff}
+  .tag.seen{background:rgba(246,101,62,.2);color:#ffb59d}
+  .mini{display:flex;gap:2px;justify-content:center;margin-top:4px;min-height:30px}
+  .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:0}
+  .msg{text-align:center;font-weight:800;font-size:16px;min-height:22px;padding:0 6px}
+  .msg.win{color:var(--green)}.msg.lose{color:#ff8a7a}
+  .you{background:rgba(0,0,0,.24);border:1px solid rgba(232,195,122,.25);border-radius:14px;padding:8px}
+  .you-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .you-head .nm{font-weight:800}
+  .hand{display:flex;gap:6px;justify-content:center}
+  .card{width:52px;height:74px;border-radius:8px;background:#fff;color:#111;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;font-weight:800;
+    box-shadow:0 3px 8px rgba(0,0,0,.4);animation:deal .2s ease}
+  .card.small{width:20px;height:28px;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .card.red{color:#d11e2a}
+  .card .r{line-height:1;font-size:18px}.card.small .r{font-size:9px}
+  .card .s{line-height:1;font-size:15px}.card.small .s{font-size:8px}
+  .card-back{width:52px;height:74px;border-radius:8px;border:2px solid var(--gold-2);
+    background:repeating-linear-gradient(45deg,#122,#122 6px,#1c3a5e 6px,#1c3a5e 12px)}
+  .card-back.small{width:20px;height:28px;border-width:1px;border-radius:4px}
+  @keyframes deal{from{transform:translateY(-14px) scale(.85);opacity:0}to{transform:none;opacity:1}}
+  .rankname{text-align:center;font-size:12px;color:var(--gold);min-height:15px;font-weight:700}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px}
+  .btn{border:none;border-radius:12px;padding:12px 14px;font-weight:800;font-size:14px;
+    color:#3a2a00;background:linear-gradient(180deg,#ffe9a8,var(--gold-2));flex:1;min-width:70px;transition:transform .1s}
+  .btn:active{transform:scale(.95)}
+  .btn.blue{background:linear-gradient(180deg,#4a83ff,var(--blue));color:#fff}
+  .btn.red{background:linear-gradient(180deg,#ff855f,var(--red));color:#fff}
+  .btn.ghost{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2)}
+  .btn:disabled{opacity:.4}
+  .btn small{display:block;font-weight:600;font-size:10px;opacity:.85}
+  .center-action{border:none;border-radius:12px;padding:13px 26px;font-weight:900;font-size:16px;
+    background:linear-gradient(180deg,#ffe9a8,var(--gold-2));color:#3a2a00}
+  .hint{text-align:center;font-size:11px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <span class="brand">Teen Patti</span>
+    <span class="balance" id="balance"><small>₹</small> 1000</span>
+  </div>
+
+  <div class="table">
+    <div class="pot" id="pot"></div>
+    <div class="opponents" id="opponents"></div>
+    <div class="center">
+      <div class="msg" id="msg"></div>
+      <div id="centerAction"></div>
+    </div>
+    <div class="you">
+      <div class="you-head">
+        <span class="nm">You</span>
+        <span class="st" id="youStatus"></span>
+      </div>
+      <div class="hand" id="youHand"></div>
+      <div class="rankname" id="youRank"></div>
+      <div class="actions" id="actions"></div>
+      <div class="hint" id="hint"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var mem={};
+  function store(k,v){try{localStorage.setItem(k,v)}catch(e){mem[k]=v}}
+  function load(k){try{var v=localStorage.getItem(k);return v==null?mem[k]:v}catch(e){return mem[k]}}
+
+  var SUITS=["S","H","D","C"];
+  function isRed(s){return s==="H"||s==="D"}
+  function rlabel(r){return ({14:"A",13:"K",12:"Q",11:"J"})[r]||String(r)}
+  function glyph(s){return ({S:"♠",H:"♥",D:"♦",C:"♣"})[s]}
+  function freshDeck(){var d=[];for(var i=0;i<4;i++)for(var r=2;r<=14;r++)d.push({rank:r,suit:SUITS[i]});return d}
+  function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+
+  // ---- hand ranking (3 cards) ----
+  // returns {cat, tb[], name}  cat: 6 trail,5 pure seq,4 seq,3 color,2 pair,1 high
+  function evalHand(cards){
+    var rs=cards.map(function(c){return c.rank}).sort(function(a,b){return b-a});
+    var suits=cards.map(function(c){return c.suit});
+    var flush=suits[0]===suits[1]&&suits[1]===suits[2];
+    var set=new Set(rs);
+    var seq=false, seqTop=rs[0];
+    if(set.size===3){
+      if(rs[0]-rs[1]===1&&rs[1]-rs[2]===1){seq=true;seqTop=rs[0];}
+      // A-2-3 wheel (14,3,2): lowest sequence, top card = 3
+      else if(rs[0]===14&&rs[1]===3&&rs[2]===2){seq=true;seqTop=3;}
+    }
+    if(rs[0]===rs[1]&&rs[1]===rs[2]) return {cat:6,tb:[6,rs[0]],name:"Trail ("+rlabel(rs[0])+"‑set)"};
+    if(seq&&flush) return {cat:5,tb:[5,seqTop],name:"Pure Sequence"};
+    if(seq) return {cat:4,tb:[4,seqTop],name:"Sequence"};
+    if(flush) return {cat:3,tb:[3].concat(rs),name:"Color (flush)"};
+    if(rs[0]===rs[1]||rs[1]===rs[2]){
+      var pair=rs[1], kick;
+      if(rs[0]===rs[1]) kick=rs[2]; else kick=rs[0];
+      return {cat:2,tb:[2,pair,kick],name:"Pair of "+rlabel(pair)+"s"};
+    }
+    return {cat:1,tb:[1].concat(rs),name:"High Card "+rlabel(rs[0])};
+  }
+  function cmp(a,b){ // a,b are tb arrays; >0 => a wins
+    for(var i=0;i<Math.max(a.length,b.length);i++){
+      var x=a[i]||0,y=b[i]||0; if(x!==y) return x-y;
+    }
+    return 0;
+  }
+
+  // ---- state ----
+  var BOOT=10, CAP=BOOT*64;
+  var balance=Number(load("tp_balance")); if(!isFinite(balance)||balance<=0)balance=1000;
+  var players=[], pot=0, stake=BOOT, cur=0, roundOver=true, turnGuard=0;
+  var YOU=0;
+
+  var $=function(id){return document.getElementById(id)};
+  function cardEl(c,small,hidden){
+    var d=document.createElement("div");
+    if(hidden){d.className="card-back"+(small?" small":"");return d;}
+    d.className="card"+(small?" small":"")+(isRed(c.suit)?" red":"");
+    d.innerHTML='<span class="r">'+rlabel(c.rank)+'</span><span class="s">'+glyph(c.suit)+'</span>';
+    return d;
+  }
+  function setBalance(v){balance=Math.round(v);store("tp_balance",String(balance));
+    $("balance").innerHTML="<small>₹</small> "+balance;
+    $("balance").classList.add("bump");setTimeout(function(){$("balance").classList.remove("bump")},200);}
+
+  function activePlayers(){return players.filter(function(p){return p.inRound})}
+
+  function render(){
+    // pot
+    $("pot").innerHTML='POT ₹'+pot+'  <span class="stake">· stake ₹'+stake+'</span>';
+    // opponents (1..3)
+    var opp=$("opponents");opp.innerHTML="";
+    for(var i=1;i<players.length;i++){
+      var p=players[i];
+      var seat=document.createElement("div");
+      seat.className="seat"+(p.inRound?"":" packed")+(cur===i&&!roundOver?" turn":"")+(p.winner?" winner":"");
+      var mini='<div class="mini">';
+      for(var k=0;k<3;k++) mini+= p.reveal ? cardHTML(p.cards[k],true) : '<div class="card-back small"></div>';
+      mini+='</div>';
+      seat.innerHTML='<div class="nm">'+p.name+'</div><div class="st">'+(p.status||"")+'</div>'+
+        '<span class="tag '+(p.seen?"seen":"blind")+'">'+(p.seen?"SEEN":"BLIND")+'</span>'+mini;
+      opp.appendChild(seat);
+    }
+    // you
+    var you=players[YOU];
+    $("youStatus").textContent = you.inRound ? (you.seen?"SEEN":"BLIND playing") : "PACKED";
+    var yh=$("youHand");yh.innerHTML="";
+    you.cards.forEach(function(c){ yh.appendChild(cardEl(c, false, !you.seen)); });
+    $("youRank").textContent = you.seen ? evalHand(you.cards).name : "Tap ‘See Cards’ to reveal";
+  }
+  function cardHTML(c,small){
+    return '<div class="card'+(small?" small":"")+(isRed(c.suit)?" red":"")+'">'+
+      '<span class="r">'+rlabel(c.rank)+'</span><span class="s">'+glyph(c.suit)+'</span></div>';
+  }
+
+  function newRound(){
+    if(balance<BOOT){ setBalance(1000); }
+    var deck=shuffle(freshDeck());
+    players=[];
+    var names=["You","Ravi","Priya","Sam"];
+    for(var i=0;i<4;i++){
+      players.push({name:names[i],cards:[deck.pop(),deck.pop(),deck.pop()],
+        seen:false,inRound:true,reveal:false,status:"",blindTurns:0,winner:false,isYou:i===0});
+    }
+    pot=0;stake=BOOT;roundOver=false;turnGuard=0;
+    // boot from everyone
+    players.forEach(function(p){ pot+=BOOT; if(p.isYou) setBalance(balance-BOOT); });
+    cur=1; // action starts left of you; you act after bots' first ring for simplicity we start at you
+    cur=YOU;
+    $("msg").className="msg";$("msg").textContent="New hand dealt. You're blind — play or see.";
+    $("centerAction").innerHTML="";
+    render();
+    turn();
+  }
+
+  function payAndBet(p, seenBet, raise){
+    if(raise) stake=Math.min(stake*2,CAP);
+    var amt = (p.seen?2:1)*stake;
+    // seenBet override not needed; amt computed from seen flag
+    pot+=amt;
+    if(p.isYou) setBalance(balance-amt);
+    p.status=(p.seen?"chaal ₹":"blind ₹")+amt+(raise?" (raise)":"");
+    return amt;
+  }
+
+  function pack(p){ p.inRound=false; p.status="packed"; }
+
+  function nextIndex(){
+    for(var step=1;step<=players.length;step++){
+      var idx=(cur+step)%players.length;
+      if(players[idx].inRound) return idx;
+    }
+    return cur;
+  }
+
+  function turn(){
+    if(roundOver) return;
+    var act=activePlayers();
+    if(act.length===1){ return endRound(act[0], "everyone else packed"); }
+    if(turnGuard++>60){ return forceShow(); }
+    var p=players[cur];
+    if(!p.inRound){ cur=nextIndex(); return turn(); }
+    render();
+    if(p.isYou){ renderYourActions(); }
+    else { $("actions").innerHTML=""; setTimeout(function(){ botMove(p); }, 750); }
+  }
+
+  function advance(){ cur=nextIndex(); turn(); }
+
+  function renderYourActions(){
+    var you=players[YOU], act=activePlayers();
+    var box=$("actions");box.innerHTML="";
+    $("hint").textContent = you.seen
+      ? "Chaal = match bet (₹"+(2*stake)+"). Raise doubles the stake."
+      : "Blind: play without seeing (₹"+stake+"), or see your cards.";
+    function mk(label,cls,fn,dis){var b=document.createElement("button");b.className="btn "+(cls||"");
+      b.innerHTML=label;b.disabled=!!dis;b.onclick=fn;box.appendChild(b);return b;}
+
+    if(!you.seen){
+      mk("See Cards","ghost",function(){ you.seen=true; you.reveal=true; render(); renderYourActions(); });
+      mk("Play Blind<small>₹"+stake+"</small>","blue",function(){ payAndBet(you,false,false); advance(); }, balance<stake);
+      mk("Raise<small>₹"+(2*stake)+"</small>","blue",function(){ payAndBet(you,false,true); advance(); }, balance<2*stake);
+    } else {
+      mk("Chaal<small>₹"+(2*stake)+"</small>","red",function(){ payAndBet(you,true,false); advance(); }, balance<2*stake);
+      mk("Raise<small>₹"+(4*stake)+"</small>","red",function(){ payAndBet(you,true,true); advance(); }, balance<4*stake);
+      if(act.length===2){
+        mk("Show<small>₹"+(2*stake)+"</small>","ghost",function(){
+          if(balance<2*stake) return;
+          pot+=2*stake; setBalance(balance-2*stake); showdown();
+        });
+      }
+    }
+    mk("Pack","ghost",function(){ pack(you); render(); advance(); });
+  }
+
+  function botMove(p){
+    if(roundOver||!p.inRound) return;
+    var act=activePlayers();
+    // decide to see
+    if(!p.seen && (p.blindTurns>=2 || (p.blindTurns>=1 && Math.random()<0.45))){ p.seen=true; }
+    var strong=0;
+    if(p.seen){ strong=evalHand(p.cards).cat; }
+    var costNext=(p.seen?2:1)*stake;
+
+    // expensive pot fold logic
+    if(p.seen){
+      if(strong<=1 && stake>BOOT*4 && Math.random()<0.7){ pack(p); render(); return advance(); }
+      if(strong===2 && stake>BOOT*12 && Math.random()<0.5){ pack(p); render(); return advance(); }
+      if(act.length===2){
+        // decide show vs chaal vs pack
+        if(strong>=4 || (strong>=2 && Math.random()<0.5)){
+          pot+=2*stake; return revealShow(p);
+        }
+        if(strong<=1 && Math.random()<0.6){ pack(p); render(); return advance(); }
+      }
+      var raise = strong>=3 && stake<CAP/2 && Math.random()<0.5;
+      if(strong<=1 && Math.random()<0.35 && stake>BOOT*3){ pack(p); render(); return advance(); }
+      payAndBet(p,true,raise); render(); return advance();
+    } else {
+      p.blindTurns++;
+      if(stake>BOOT*8 && Math.random()<0.4){ pack(p); render(); return advance(); }
+      var r = stake<CAP/2 && Math.random()<0.18;
+      payAndBet(p,false,r); render(); return advance();
+    }
+  }
+
+  function revealShow(bot){ // bot initiates a show against the other remaining player
+    if(bot.isYou) return showdown();
+    showdown();
+  }
+
+  function forceShow(){
+    var act=activePlayers();
+    if(act.length<=1) return endRound(act[0]||players[YOU]);
+    showdown();
+  }
+
+  function showdown(){
+    roundOver=true;
+    var act=activePlayers();
+    act.forEach(function(p){ p.reveal=true; p.seen=true; });
+    // find best
+    var best=act[0];
+    for(var i=1;i<act.length;i++){ if(cmp(evalHand(act[i].cards).tb, evalHand(best.cards).tb)>0) best=act[i]; }
+    endRound(best, "show");
+  }
+
+  function endRound(winner, reason){
+    roundOver=true;
+    players.forEach(function(p){ if(p.inRound){p.reveal=true;} });
+    winner.winner=true;
+    var youWon = winner.isYou;
+    if(youWon){ setBalance(balance+pot); }
+    render();
+    var m=$("msg"); m.className="msg "+(youWon?"win":"lose");
+    m.textContent = youWon ? ("You win ₹"+pot+"!  ("+evalHand(winner.cards).name+")")
+      : (winner.name+" wins ₹"+pot+(reason==="show"?" on show":"")+".  ("+evalHand(winner.cards).name+")");
+    $("actions").innerHTML="";$("hint").textContent="";
+    var ca=$("centerAction");ca.innerHTML="";
+    var b=document.createElement("button");b.className="center-action";b.textContent="Deal next hand";
+    b.onclick=newRound;ca.appendChild(b);
+  }
+
+  // start
+  setBalance(balance);
+  (function initial(){
+    $("msg").textContent="Teen Patti — you vs 3 players. Boot ₹"+BOOT+" each.";
+    var ca=$("centerAction");var b=document.createElement("button");
+    b.className="center-action";b.textContent="Deal cards";b.onclick=newRound;ca.appendChild(b);
+    // empty seats preview
+    players=[{name:"You",cards:[],seen:false,inRound:false,reveal:false,isYou:true},
+             {name:"Ravi",cards:[],inRound:false},{name:"Priya",cards:[],inRound:false},{name:"Sam",cards:[],inRound:false}];
+    render();
+    $("youRank").textContent="";
+  })();
+})();
+</script>
+</body>
+</html>

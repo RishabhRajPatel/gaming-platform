@@ -34,11 +34,23 @@ Thumbs.db
 *.log
 logs/
 *.sqlite3
+*.db
 docker-compose.override.yml
 
 # Secrets
 *.pem
 *.key
+*.keystore
+*.jks
+signing-key-info.txt
 secrets/
-rummy-apk/
 _pytest.db
+
+# rummy's TWA packaging folder: keep twa-manifest.json (no secrets) tracked so CI
+# can read it, but never the signing key, prebuilt binaries, or Play Store zip.
+rummy/android-twa/*.apk
+rummy/android-twa/*.aab
+rummy/android-twa/*.zip
+rummy/android-twa/Readme.html
+rummy/android-twa/app/
+rummy/android-twa/manifest-checksum.txt
