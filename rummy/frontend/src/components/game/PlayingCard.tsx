@@ -10,6 +10,7 @@ interface Props {
   draggable?: boolean;
   onDragStart?: (e: DragEvent) => void;
   onDragEnd?: () => void;
+  className?: string;
 }
 
 const SUIT = {
@@ -30,9 +31,9 @@ function parse(code: string) {
 }
 
 export default function PlayingCard({
-  code, selected, onClick, small, wild, faceDown, draggable, onDragStart, onDragEnd,
+  code, selected, onClick, small, wild, faceDown, draggable, onDragStart, onDragEnd, className,
 }: Props) {
-  const size = small ? "w-12 h-[4.5rem]" : "w-20 h-28";
+  const size = [small ? "w-12 h-[4.5rem]" : "w-20 h-28", className].filter(Boolean).join(" ");
 
   if (faceDown) {
     return (

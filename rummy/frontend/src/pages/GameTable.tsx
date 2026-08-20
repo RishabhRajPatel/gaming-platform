@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, Users, MessageCircle, Smile, Settings, Flag,
-  Layers3, Trash2, RotateCcw, Sparkles, Shuffle, Trophy,
+  ArrowLeft, Users, History, BarChart3, Volume2, VolumeX, Settings, Flag,
+  Trash2, RotateCcw, Sparkles, Shuffle, Trophy, MessageCircle, Minus, Plus,
 } from "lucide-react";
 import PlayingCard from "../components/game/PlayingCard";
+import "./GameTable.css";
 import RulesModal from "../components/RulesModal";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { autoArrange, classifyGroup, deadwoodPoints, isWild, parseCard, sortHand } from "../services/melds";
@@ -25,14 +26,6 @@ function randomCardCode(): string {
   const suit = suits[Math.floor(Math.random() * suits.length)];
   return `${rank}${suit}0`;
 }
-
-const STATUS_STYLES: Record<string, string> = {
-  active: "bg-green-900/60 text-green-300 border-green-700",
-  dropped: "bg-slate-800 text-slate-400 border-slate-600",
-  won: "bg-gold-500/20 text-gold-400 border-gold-600",
-  lost: "bg-red-900/60 text-red-300 border-red-700",
-  out: "bg-red-950 text-red-400 border-red-800",
-};
 
 /** A circular countdown ring around a player's avatar — depletes from `total` down to
  * 0. Purely visual (the numeric badges already told the story); the server is still
@@ -62,18 +55,6 @@ function TurnRing({ seconds, total, size }: { seconds: number; total: number; si
         className={`transition-[stroke-dashoffset] duration-1000 ease-linear ${urgent ? "animate-pulse" : ""}`}
       />
     </svg>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  return (
-    <span
-      className={`inline-block mt-0.5 text-[9px] uppercase font-semibold px-1.5 py-0.5 rounded-full border ${
-        STATUS_STYLES[status] ?? "bg-ink-800 text-slate-400 border-ink-600"
-      }`}
-    >
-      {status}
-    </span>
   );
 }
 
@@ -171,21 +152,19 @@ export default function GameTable() {
   const [tossFading, setTossFading] = useState(false);
   const [tossCards, setTossCards] = useState<[string, string] | null>(null);
   const tossShownForDeal = useRef<number | null>(null);
+  const tossTimers = useRef<{ fade?: ReturnType<typeof setTimeout>; clear?: ReturnType<typeof setTimeout> }>({});
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
-
-  // Real device height, not just Tailwind's `short:` CSS breakpoint — cards need an
-  // actually smaller layout box on landscape phones (~390px tall), not just a visual
-  // shrink, or the hand tray still reserves full-size space and pushes the action
-  // buttons off-screen.
-  const [compactCards, setCompactCards] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-height: 480px)");
-    setCompactCards(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setCompactCards(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
+  // No sound effects exist yet, but the preference itself is real and persists —
+  // this toggle isn't a decorative stand-in, it's what future sound effects will read.
+  const [soundOn, setSoundOn] = useState(() => localStorage.getItem("rummy_sound") !== "off");
+  function toggleSound() {
+    setSoundOn((v) => {
+      const next = !v;
+      localStorage.setItem("rummy_sound", next ? "on" : "off");
+      return next;
+    });
+  }
 
   // The felt table is a wide oval — it only works in landscape. The installed
   // Android APK already force-locks landscape natively (manifest.webmanifest's
@@ -261,17 +240,28 @@ export default function GameTable() {
     setTossMessage(`${firstPlayer.name} won the toss and will play first.`);
     setTossFading(false);
     setTossCards([randomCardCode(), randomCardCode()]);
-    const fadeTimer = setTimeout(() => setTossFading(true), 2700);
-    const clearTimer = setTimeout(() => {
+    // Timers are owned by a ref, not this effect's cleanup — turn/phase changing
+    // later in the same deal (e.g. the first player draws within 3s) would otherwise
+    // re-run this effect, cancel the pending hide-timers via cleanup, and then hit
+    // the guard above and return before rescheduling — leaving the toast stuck
+    // forever. Clearing+resetting here (only reached once per deal) avoids that.
+    clearTimeout(tossTimers.current.fade);
+    clearTimeout(tossTimers.current.clear);
+    tossTimers.current.fade = setTimeout(() => setTossFading(true), 2700);
+    tossTimers.current.clear = setTimeout(() => {
       setTossMessage(null);
       setTossCards(null);
     }, 3000);
-    return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(clearTimer);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.phase, state?.deal_number, state?.turn]);
+
+  useEffect(() => {
+    const timers = tossTimers.current;
+    return () => {
+      clearTimeout(timers.fade);
+      clearTimeout(timers.clear);
+    };
+  }, []);
 
   function handleStart() {
     send({ action: "start" });
@@ -377,6 +367,16 @@ export default function GameTable() {
     setSelected(new Set());
   }
 
+  function ungroupSelected() {
+    if (selected.size === 0) return;
+    setGroups((gs) => {
+      const pulled = gs.flat().filter((c) => selected.has(c));
+      const remaining = gs.map((g) => g.filter((c) => !selected.has(c))).filter((g) => g.length > 0);
+      return [...remaining, ...pulled.map((c) => [c])];
+    });
+    setSelected(new Set());
+  }
+
   function resetGroups() {
     const all = [...groups.flat(), ...(finishCard ? [finishCard] : [])];
     setGroups(all.length > 0 ? [all] : []);
@@ -463,11 +463,14 @@ export default function GameTable() {
   const canDrop = myTurn && (phase === "await_draw" || phase === "await_discard");
   const seatedCount = state?.players.length ?? 0;
   const emptySeats = table ? Math.max(0, table.max_players - seatedCount) : 0;
+  const chipsLabel = me
+    ? (pointValue != null ? `₹${me.chips}` : `${me.chips}`)
+    : "—";
 
   if (portraitPhone) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center bg-ink-950">
-        <RotateCcw size={40} className="text-gold-500 animate-pulse" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center bg-[#050506]">
+        <RotateCcw size={40} className="text-[#F4C542] animate-pulse" />
         <p className="text-slate-200 font-medium">Please rotate your device to landscape mode</p>
         <p className="text-slate-500 text-sm">Deals Rummy plays best in landscape.</p>
       </div>
@@ -475,384 +478,162 @@ export default function GameTable() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header
-        className="relative flex items-center justify-between px-4 py-2.5 short:py-0.5 gap-3 backdrop-blur shadow-lg z-10"
-        style={{ background: "rgba(9, 11, 24, 0.92)" }}
-      >
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-gold-500/60 to-transparent" />
-        <div className="flex items-center gap-3">
-          <button className="btn-ghost px-2 py-1 flex items-center gap-1.5" onClick={() => setLeaveConfirmOpen(true)}>
-            <ArrowLeft size={16} />
-            Lobby
+    <div className="gt-shell">
+      <header className="gt-header">
+        <div className="gt-header-cluster">
+          <button className="gt-chip" onClick={() => setLeaveConfirmOpen(true)}>
+            <ArrowLeft size={14} /><span>Lobby</span>
           </button>
-          <span className="hidden sm:flex items-center gap-1.5 font-display font-bold text-gold-500 tracking-wide">
-            🃏 Deals Rummy
-          </span>
+          <span className="gt-title">Deals Rummy</span>
         </div>
-        <div
-          className="flex-1 flex justify-center items-center gap-3 text-xs px-4 py-1.5 font-medium max-w-md rounded-xl"
-          style={{ background: "rgba(10, 8, 25, 0.85)", color: "#F4E6C1" }}
-        >
+        <div className="gt-header-cluster">
           {table && (
-            <span className="flex items-center gap-1.5">
-              <Users size={13} style={{ color: "#49D78C" }} />
-              Select Players: {table.max_players}
+            <span className="gt-chip">
+              <Users size={12} className="text-[#49D78C]" />
+              Players {table.max_players}
             </span>
           )}
-          {table && <span style={{ color: "#FFE02B" }}>•</span>}
-          {table && <span>{modeName}</span>}
-          {pointValue != null && (
-            <>
-              <span style={{ color: "#FFE02B" }}>•</span>
-              <span style={{ color: "#FFE02B" }}>Point Value: {pointValue.toFixed(1)}</span>
-            </>
-          )}
+          {table && <span className="gt-chip gt-hide-narrow">{modeName}</span>}
         </div>
-        <div className="text-xs text-right shrink-0 flex items-center gap-2">
-          <span className={`flex items-center gap-1 ${connected ? "text-green-400" : "text-red-400"}`}>
+        <div className="gt-header-cluster">
+          <span className={`gt-chip ${connected ? "text-green-400" : "text-red-400"}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-400 animate-pulse" : "bg-red-400"}`} />
-            {connected ? "live" : "reconnecting"}
+            {connected ? "LIVE" : "OFFLINE"}
           </span>
           {state && (
-            <span className="hidden md:inline text-slate-400">
-              {state.pool_limit != null ? `Pool ${state.pool_limit} · Deal ${state.deal_number}` : `Deal ${state.deal_number}/${state.num_deals}`}
+            <span className="gt-chip uppercase text-[10px] text-[#F4C542] gt-hide-narrow">
+              {phase.replace("_", " ")}
             </span>
           )}
-          <span className="uppercase px-2 py-0.5 rounded-full bg-ink-800 border border-ink-700 text-gold-400 font-semibold text-[10px]">
-            {phase.replace("_", " ")}
-          </span>
           {secondsLeft !== null && (
-            <span
-              className={`px-2 py-0.5 rounded-full border font-mono font-bold text-[11px] ${
-                secondsLeft <= 5
-                  ? "bg-red-900/60 border-red-600 text-red-300 animate-pulse"
-                  : "bg-ink-800 border-ink-700 text-slate-200"
-              }`}
-            >
+            <span className={`gt-chip font-mono ${secondsLeft <= 5 ? "text-red-300 animate-pulse" : ""}`}>
               ⏱ 0:{secondsLeft.toString().padStart(2, "0")}
             </span>
           )}
+          <div className="relative">
+            <button className="gt-chip !px-2" onClick={() => setSettingsMenuOpen((v) => !v)} aria-label="Settings">
+              <Settings size={15} />
+            </button>
+            {settingsMenuOpen && (
+              <div className="absolute right-0 top-9 w-40 rounded-xl border border-white/10 bg-[#0D0B1B]/95 backdrop-blur-xl shadow-2xl overflow-hidden z-[70]">
+                <button className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-white/5" onClick={() => { setSettingsMenuOpen(false); setRulesOpen(true); }}>📖 Rules</button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* Table felt */}
-      <main
-        className="flex-1 flex items-center justify-center p-4 sm:p-8 short:p-1"
-        style={{
-          background:
-            "radial-gradient(circle at 50% 20%, #24264A 0%, #17182F 55%, #090B18 100%)",
-        }}
-      >
-        <div
-          className="relative w-full max-w-4xl short:max-w-[210px] aspect-[2/1] rounded-[50%] short:rounded-3xl border-[8px] short:border-4 flex flex-col items-center justify-evenly short:gap-0.5 px-8 sm:px-20 short:px-2 py-6 short:py-0.5"
-          style={{
-            borderColor: "#11152A",
-            background:
-              "radial-gradient(ellipse at center, #20C98B 0%, #0DAA7B 45%, #007052 100%)",
-            boxShadow:
-              "0 0 0 4px #242743, 0 0 0 10px #0B1020, 0 12px 35px rgba(0,0,0,0.65), inset 0 0 80px rgba(0,0,0,0.35)",
-          }}
-        >
-          {/* Faint felt watermark */}
-          <div className="absolute inset-0 rounded-[50%] flex items-center justify-center pointer-events-none overflow-hidden opacity-[0.05]">
-            <span className="font-display font-bold text-[6rem] tracking-widest text-gold-200 select-none">
-              RUMMY
-            </span>
+      <main className="gt-main">
+        <div className="gt-rails gt-rails-left">
+          <button type="button" className="gt-rail-btn" onClick={() => alert("History — coming soon")}><History size={15} /><span>History</span></button>
+          <button type="button" className="gt-rail-btn" onClick={() => alert("Score — coming soon")}><BarChart3 size={15} /><span>Score</span></button>
+          <button type="button" className="gt-rail-btn" onClick={() => alert("Chat — coming soon")}><MessageCircle size={15} /><span>Chat</span></button>
+          <button type="button" className="gt-rail-btn" onClick={toggleSound}>
+            {soundOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            <span>{soundOn ? "Sound" : "Muted"}</span>
+          </button>
+        </div>
+
+        <div className="gt-rails gt-rails-right">
+          <button type="button" className="gt-rail-btn" disabled={hand.length === 0} onClick={doSort}><Shuffle size={15} /><span>Sort</span></button>
+          <button type="button" className="gt-rail-btn" disabled={hand.length === 0} onClick={doAutoSort}><Sparkles size={15} className="text-[#F4C542]" /><span>Auto Sort</span></button>
+          <button type="button" className="gt-rail-btn" onClick={resetGroups}><RotateCcw size={15} /><span>Reset</span></button>
+        </div>
+
+        <div className="gt-table">
+          <div className="gt-felt">
+            <div className="gt-watermark">RUMMY</div>
           </div>
-          {/* Opponents */}
-          <div className="flex justify-center gap-6 flex-wrap">
-            {opponents.map((p) => (
-              <div key={p.id} className="text-center relative">
-                {/* Card-back fan sized to their real hand count — decorative, not interactive */}
-                <div className="short:hidden flex justify-center -space-x-4 mb-1 h-6">
-                  {Array.from({ length: Math.min(p.hand_count, 13) }).map((_, i, arr) => (
-                    <div
-                      key={i}
-                      className="w-4 h-6 rounded-sm border border-gold-700/50 bg-[repeating-linear-gradient(45deg,#3a2610,#3a2610_2px,#1d1409_2px,#1d1409_4px)]"
-                      style={{ transform: `rotate(${(i - (arr.length - 1) / 2) * 4}deg)` }}
-                    />
-                  ))}
-                </div>
-                <div className="relative w-14 h-14 sm:w-16 sm:h-16 short:!w-8 short:!h-8 mx-auto">
-                  <div
-                    className={`absolute inset-0 rounded-full bg-gradient-to-br from-ink-700 to-ink-900 border-2 flex items-center justify-center font-display font-bold text-lg ${
-                      state?.turn === p.id ? "border-gold-500 shadow-glow" : "border-ink-600"
-                    }`}
-                  >
-                    {p.name.slice(0, 2).toUpperCase()}
+
+          <div className="relative z-10 pt-1 text-center">
+            <div className="flex justify-center gap-5 flex-wrap px-6">
+              {opponents.map((p) => (
+                <div key={p.id} className="text-center relative">
+                  <div className="relative w-10 h-10 mx-auto">
+                    <div className={`absolute inset-0 rounded-full bg-gradient-to-br from-[#2B3045] to-[#090B14] border-2 flex items-center justify-center font-display font-bold text-sm ${state?.turn === p.id ? "border-[#F4C542] shadow-[0_0_18px_rgba(244,197,66,.45)]" : "border-white/30"}`}>{p.name.slice(0, 2).toUpperCase()}</div>
+                    {state?.turn === p.id && secondsLeft !== null && <TurnRing seconds={secondsLeft} total={table?.turn_seconds ?? 30} size={40} />}
+                    {state?.turn === p.id && secondsLeft !== null && <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#0B1020] border-2 border-[#F4C542] flex items-center justify-center text-[7px] font-mono font-bold text-[#F4C542]">{secondsLeft}</span>}
+                    {(p.eliminated || p.status !== "active") && (
+                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-red-900 border border-red-600 flex items-center justify-center text-[7px]">✕</span>
+                    )}
                   </div>
-                  {state?.turn === p.id && secondsLeft !== null && (
-                    <TurnRing seconds={secondsLeft} total={table?.turn_seconds ?? 30} size={64} />
-                  )}
-                  {state?.turn === p.id && secondsLeft !== null && (
-                    <span className="absolute -top-1 -right-1 short:!-top-0.5 short:!-right-0.5 w-6 h-6 short:!w-3.5 short:!h-3.5 rounded-full bg-ink-950 border-2 border-gold-500 flex items-center justify-center text-[10px] short:!text-[6px] font-mono font-bold text-gold-300">
-                      {secondsLeft}
-                    </span>
-                  )}
-                </div>
-                <div className="text-sm font-medium text-slate-100 mt-1 short:text-[10px] short:mt-0">{p.name}</div>
-                <div className="text-xs text-slate-300 short:hidden">🪙 {p.chips} · 🂠 {p.hand_count}</div>
-                {state?.pool_limit != null && (
-                  <div className="text-[10px] text-slate-500 font-mono short:hidden">
-                    {p.total_score}/{state.pool_limit}
-                  </div>
-                )}
-                <div className="short:hidden">
-                  <StatusPill status={p.eliminated ? "out" : p.status} />
-                </div>
-              </div>
-            ))}
-            {phase === "waiting" &&
-              Array.from({ length: emptySeats }).map((_, i) => (
-                <div key={`empty-${i}`} className="text-center opacity-40">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-dashed border-ink-600 flex items-center justify-center mx-auto">
-                    <span className="text-2xl text-slate-600">?</span>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">Empty seat</div>
+                  <div className="text-[10px] font-semibold text-white mt-0.5 leading-tight">{p.name}</div>
+                  <div className="text-[8px] text-white/70 leading-tight">🪙{p.chips} · 🂠{p.hand_count}</div>
                 </div>
               ))}
+              {phase === "waiting" && Array.from({ length: emptySeats }).map((_, i) => (
+                <div key={`empty-${i}`} className="text-center opacity-40">
+                  <div className="w-10 h-10 rounded-full border-2 border-dashed border-white/30 flex items-center justify-center mx-auto"><span className="text-lg text-white/40">?</span></div>
+                  <div className="text-[9px] text-white/50 mt-0.5">Empty</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="gt-piles">
+            <div className="text-center">
+              {state?.wild_joker ? <PlayingCard code={state.wild_joker} wild small /> : <div className="w-12 h-[4.5rem] rounded-lg bg-black/20 border border-dashed border-white/25" />}
+              <div className="gt-pile-label">Wild</div>
+            </div>
+            <button className="text-center disabled:opacity-60" disabled={!myTurn || phase !== "await_draw"} onClick={() => send({ action: "draw", source: "stock" })}>
+              <PlayingCard code="" faceDown small />
+              <div className="gt-pile-label">Closed ({state?.stock_count ?? 0})</div>
+            </button>
+            <div
+              role="button"
+              tabIndex={0}
+              className={`text-center ${myTurn && phase === "await_draw" ? "cursor-pointer" : "opacity-60"}`}
+              onClick={myTurn && phase === "await_draw" ? () => send({ action: "draw", source: "discard" }) : undefined}
+            >
+              {state?.top_discard ? <PlayingCard code={state.top_discard} small /> : <div className="w-12 h-[4.5rem] rounded-lg bg-black/20 border border-dashed border-white/25" />}
+              <div className="gt-pile-label">Open ({state?.discard_count ?? 0})</div>
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              className={`gt-finish ${!finishCard && selected.size !== 1 ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${finishCard ? "filled" : ""} ${dragCode ? "ring-2 ring-[#F4C542]" : ""}`}
+              onClick={!finishCard && selected.size !== 1 ? undefined : toggleFinishSlot}
+              onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && (finishCard || selected.size === 1)) toggleFinishSlot(); }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={dropOnFinishSlot}
+            >
+              {finishCard ? <PlayingCard code={finishCard} small /> : "Finish\nSlot"}
+            </div>
+
+            {tossMessage && (
+              <div className={`absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-opacity duration-500 ${tossFading ? "opacity-0" : "opacity-100"}`}>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-medium text-center bg-[#002A1F]/95 border border-[#1ED291]/30 shadow-2xl max-w-[92%]">
+                  {tossCards && <PlayingCard code={tossCards[0]} small />}
+                  <span>{tossMessage}</span>
+                  {tossCards && <PlayingCard code={tossCards[1]} small />}
+                </div>
+              </div>
+            )}
           </div>
 
           {phase === "waiting" && (
-            <p className="text-center text-sm text-slate-300">
-              {seatedCount < 2
-                ? `Waiting for players to join (${seatedCount}/2 minimum)…`
-                : `${seatedCount} seated — ready to start whenever you are.`}
+            <p className="relative z-10 text-center text-[11px] text-white/80 px-5">
+              {seatedCount < 2 ? `Waiting for players (${seatedCount}/2 minimum)…` : `${seatedCount} seated — ready to start.`}
             </p>
           )}
 
-          {/* Center: wild joker, stock, finish slot, discard */}
-          <div className="flex justify-center items-center gap-4 sm:gap-6 short:gap-2">
-            <div className="text-center">
-              <div className="text-[10px] text-slate-300 mb-1 short:hidden">Wild</div>
-              {state?.wild_joker ? (
-                <PlayingCard code={state.wild_joker} wild small />
-              ) : (
-                <div className="w-9 h-14 rounded-md bg-ink-800/60" />
-              )}
-            </div>
-
-            <button className="text-center" disabled={!myTurn || phase !== "await_draw"}
-                    onClick={() => send({ action: "draw", source: "stock" })}>
-              <PlayingCard code="" faceDown small={compactCards} />
-              <div className="text-[10px] text-slate-300 mt-1 short:hidden">CLOSED ({state?.stock_count ?? 0})</div>
-            </button>
-
-            {(() => {
-              const finishDisabled = !finishCard && selected.size !== 1;
-              return (
-                // A <div> here, not a <button> — PlayingCard already renders its own
-                // <button> internally, and nesting buttons breaks click handling in
-                // some browsers (invalid HTML; React warns on it). The click on the
-                // inner card bubbles up to this handler naturally.
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className={`text-center w-14 h-20 rounded-lg border-2 flex items-center justify-center text-[9px] uppercase font-semibold whitespace-pre-line select-none ${
-                    finishDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                  } ${finishCard ? "border-gold-500 bg-ink-900/40" : "border-dashed border-slate-400/50 text-slate-300"} ${
-                    dragCode ? "ring-2 ring-gold-400" : ""
-                  }`}
-                  onClick={finishDisabled ? undefined : toggleFinishSlot}
-                  onKeyDown={(e) => {
-                    if (!finishDisabled && (e.key === "Enter" || e.key === " ")) toggleFinishSlot();
-                  }}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={dropOnFinishSlot}
-                >
-                  {finishCard ? <PlayingCard code={finishCard} small /> : "Finish\nSlot"}
-                </div>
-              );
-            })()}
-
-            {(() => {
-              const canPickDiscard = myTurn && phase === "await_draw";
-              return (
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className={`text-center ${canPickDiscard ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
-                  onClick={canPickDiscard ? () => send({ action: "draw", source: "discard" }) : undefined}
-                  onKeyDown={(e) => {
-                    if (canPickDiscard && (e.key === "Enter" || e.key === " ")) {
-                      send({ action: "draw", source: "discard" });
-                    }
-                  }}
-                >
-                  {state?.top_discard ? <PlayingCard code={state.top_discard} small={compactCards} /> :
-                    <div className="w-14 h-20 rounded-md bg-ink-800/60" />}
-                  <div className="text-[10px] text-slate-300 mt-1 short:hidden">OPEN ({state?.discard_count ?? 0})</div>
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Me — bottom seat, mirrors the opponent seat at the top (kept smaller
-              since my full hand is already visible in the tray below). */}
           {me && (
-            <div className="text-center relative">
-              <div className="relative w-11 h-11 sm:w-12 sm:h-12 short:!w-8 short:!h-8 mx-auto">
-                <div
-                  className={`absolute inset-0 rounded-full bg-gradient-to-br from-ink-700 to-ink-900 border-2 flex items-center justify-center font-display font-bold text-sm ${
-                    myTurn ? "border-gold-500 shadow-glow" : "border-ink-600"
-                  }`}
-                >
-                  {me.name.slice(0, 2).toUpperCase()}
-                </div>
-                {myTurn && secondsLeft !== null && (
-                  <TurnRing seconds={secondsLeft} total={table?.turn_seconds ?? 30} size={48} />
-                )}
-                {myTurn && secondsLeft !== null && (
-                  <span className="absolute -top-1 -right-1 short:!-top-0.5 short:!-right-0.5 w-5 h-5 short:!w-3.5 short:!h-3.5 rounded-full bg-ink-950 border-2 border-gold-500 flex items-center justify-center text-[9px] short:!text-[6px] font-mono font-bold text-gold-300">
-                    {secondsLeft}
-                  </span>
-                )}
-              </div>
-              <div className="text-xs font-medium text-slate-100 mt-1 short:mt-0">{me.name} (You)</div>
-              <div className="text-[11px] text-slate-300 short:hidden">🪙 {me.chips} · 🂠 {hand.length}</div>
-              {state?.pool_limit != null && (
-                <div className="text-[10px] text-slate-500 font-mono short:hidden">
-                  {me.total_score}/{state.pool_limit}
-                  {me.eliminated ? " (OUT)" : ""}
-                </div>
-              )}
-              <div className="short:hidden">
-                <StatusPill status={me.eliminated ? "out" : me.status} />
-              </div>
-            </div>
-          )}
-
-          {tossMessage && (
-            <div
-              className={`absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-opacity duration-500 ${
-                tossFading ? "opacity-0" : "opacity-100"
-              }`}
-            >
-              <div
-                className="flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-medium text-center"
-                style={{
-                  background: "rgba(0, 42, 31, 0.92)",
-                  border: "1px solid rgba(30, 210, 145, 0.25)",
-                  color: "#F5F5E8",
-                  boxShadow: "0 4px 15px rgba(0,0,0,0.35)",
-                }}
-              >
-                {tossCards && <PlayingCard code={tossCards[0]} small />}
-                <span>{tossMessage}</span>
-                {tossCards && <PlayingCard code={tossCards[1]} small />}
+            <div className="relative z-10 text-center pb-1">
+              <div className="relative w-9 h-9 mx-auto">
+                <div className={`absolute inset-0 rounded-full bg-gradient-to-br from-[#2B3045] to-[#090B14] border-2 flex items-center justify-center font-display font-bold text-xs ${myTurn ? "border-[#F4C542] shadow-[0_0_18px_rgba(244,197,66,.45)]" : "border-white/30"}`}>{me.name.slice(0, 2).toUpperCase()}</div>
+                {myTurn && secondsLeft !== null && <TurnRing seconds={secondsLeft} total={table?.turn_seconds ?? 30} size={36} />}
               </div>
             </div>
           )}
 
           {state && (state.phase === "deal_over" || state.phase === "game_over") && !resultDismissed && (
-            <ResultOverlay
-              state={state}
-              meId={me?.id ?? null}
-              onContinue={() => setResultDismissed(true)}
-              onBackToLobby={() => navigate("/lobby")}
-              onPlayAgain={handlePlayAgain}
-              playAgainBusy={playAgainBusy}
-            />
+            <ResultOverlay state={state} meId={me?.id ?? null} onContinue={() => setResultDismissed(true)} onBackToLobby={() => navigate("/lobby")} onPlayAgain={handlePlayAgain} playAgainBusy={playAgainBusy} />
           )}
         </div>
       </main>
 
-      {/* Side tool docks — chat/emoji/settings/report aren't built yet, so these are
-          inert placeholders rather than fake-working buttons. */}
-      <div className="fixed left-4 top-1/2 z-40 hidden -translate-y-1/2 flex-col gap-3 lg:flex">
-        <button
-          className="flex h-12 w-12 flex-col items-center justify-center rounded-2xl border border-white/10 bg-black/70 text-white/70 backdrop-blur-xl transition hover:border-purple-400/50 hover:text-white"
-          onClick={() => alert("Chat — coming soon")}
-        >
-          <MessageCircle size={19} />
-          <span className="mt-1 text-[9px]">Chat</span>
-        </button>
-        <button
-          className="flex h-12 w-12 flex-col items-center justify-center rounded-2xl border border-white/10 bg-black/70 text-white/70 backdrop-blur-xl transition hover:border-purple-400/50 hover:text-white"
-          onClick={() => alert("Emoji reactions — coming soon")}
-        >
-          <Smile size={19} />
-          <span className="mt-1 text-[9px]">Emoji</span>
-        </button>
-      </div>
-      <div className="fixed right-4 top-1/2 z-40 hidden -translate-y-1/2 flex-col gap-3 lg:flex">
-        <div className="relative">
-          <button
-            className="flex h-12 w-12 flex-col items-center justify-center rounded-2xl border border-white/10 bg-black/70 text-white/70 backdrop-blur-xl transition hover:border-gold-400/50 hover:text-white"
-            onClick={() => setSettingsMenuOpen((v) => !v)}
-          >
-            <Settings size={19} />
-            <span className="mt-1 text-[9px]">Settings</span>
-          </button>
-          {settingsMenuOpen && (
-            <div className="absolute right-full top-0 mr-2 w-40 rounded-xl border border-white/10 bg-ink-900/95 backdrop-blur-xl shadow-2xl overflow-hidden">
-              <button
-                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-ink-800 flex items-center gap-2"
-                onClick={() => {
-                  setSettingsMenuOpen(false);
-                  setRulesOpen(true);
-                }}
-              >
-                📖 Rules
-              </button>
-              <button
-                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-ink-800"
-                onClick={() => {
-                  setSettingsMenuOpen(false);
-                  alert("Sound settings — coming soon");
-                }}
-              >
-                🔊 Sound
-              </button>
-            </div>
-          )}
-        </div>
-        <button
-          className="flex h-12 w-12 flex-col items-center justify-center rounded-2xl border border-white/10 bg-black/70 text-white/70 backdrop-blur-xl transition hover:border-red-400/50 hover:text-white"
-          onClick={() => alert("Report — coming soon")}
-        >
-          <Flag size={19} />
-          <span className="mt-1 text-[9px]">Report</span>
-        </button>
-      </div>
-
-      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
-
-      {leaveConfirmOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="card-surface w-full max-w-sm p-6 text-center">
-            <h2 className="font-display text-lg font-bold text-gold-400 mb-3">Leave Table</h2>
-            <p className="text-sm text-slate-300 mb-6">Are you sure you want to leave the table?</p>
-            <div className="flex gap-3">
-              <button
-                className="btn-ghost rounded-full px-4 py-2 flex-1"
-                onClick={() => setLeaveConfirmOpen(false)}
-              >
-                No
-              </button>
-              <button
-                className="btn-danger rounded-full px-4 py-2 flex-1"
-                onClick={() => navigate("/lobby")}
-              >
-                Yes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Floating toast for the last server-rejected action */}
-      {lastError && (
-        <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full border border-red-800 bg-black/90 px-6 py-3 text-sm text-red-300 shadow-2xl backdrop-blur-xl">
-          ⚠ {lastError}
-        </div>
-      )}
-
-      {/* My hand: grouped melds with live valid/invalid feedback */}
-      <footer className="border-t border-gold-600/20 bg-ink-900/60 backdrop-blur p-4 short:p-1 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
-        <div className="flex w-full gap-1.5 mb-3 short:mb-1 overflow-x-auto pb-1">
+      <footer className="gt-footer">
+        <div className="gt-hand">
           {groups.map((group, i) => {
             const meldType = classifyGroup(group, wildRank);
             const valid = meldType !== "invalid";
@@ -860,20 +641,17 @@ export default function GameTable() {
             return (
               <div
                 key={i}
-                className={`flex-1 min-w-[88px] flex flex-col items-center rounded-lg p-1.5 short:p-0.5 bg-ink-900/60 border transition-shadow ${
-                  dragCode && !group.includes(dragCode)
-                    ? "ring-2 ring-gold-400/60 border-gold-500/40"
-                    : "border-ink-700"
-                }`}
+                className={`gt-hand-group ${dragCode && !group.includes(dragCode) ? "ring-2 ring-[#F4C542]/60 border-[#F4C542]/40" : ""}`}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => dropOnGroup(group.find((c) => c !== dragCode) ?? null)}
               >
-                <div className="flex justify-center">
+                <div className="gt-hand-cards">
                   {group.map((code, ci) => (
-                    <div key={code} className={ci > 0 ? "-ml-4" : ""} style={{ zIndex: ci }}>
+                    <div key={code} className="gt-hand-card" style={{ zIndex: ci }}>
                       <PlayingCard
                         code={code}
-                        small={compactCards}
+                        small
+                        className="gt-card-hand"
                         selected={selected.has(code)}
                         wild={isWild(parseCard(code), wildRank)}
                         onClick={() => toggleSelect(code)}
@@ -884,119 +662,66 @@ export default function GameTable() {
                     </div>
                   ))}
                 </div>
-                <div
-                  className={`flex items-center gap-1.5 mt-1.5 short:mt-0.5 px-2 py-0.5 short:py-0 rounded-full text-[11px] short:text-[9px] font-medium w-full justify-center ${
-                    valid ? "bg-green-700/60 text-green-200" : "bg-red-800/60 text-red-200"
-                  }`}
-                >
-                  <button
-                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-black/20 disabled:opacity-20"
-                    disabled={i === 0}
-                    onClick={() => shiftLeft(i)}
-                  >
-                    ◀
-                  </button>
-                  <span className="capitalize">{valid ? meldType.replace("_", " ") : `Invalid (${points})`}</span>
-                  <button
-                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-black/20 disabled:opacity-20"
-                    disabled={i === groups.length - 1}
-                    onClick={() => shiftRight(i)}
-                  >
-                    ▶
-                  </button>
+                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium ${valid ? "bg-green-700/60 text-green-200" : "bg-red-800/70 text-red-200"}`}>
+                  <button className="w-3.5 h-3.5 flex items-center justify-center" disabled={i === 0} onClick={() => shiftLeft(i)}>◀</button>
+                  <span className="whitespace-nowrap">{valid ? meldType.replace("_", " ") : `Invalid (${points})`}</span>
+                  <button className="w-3.5 h-3.5 flex items-center justify-center" disabled={i === groups.length - 1} onClick={() => shiftRight(i)}>▶</button>
                 </div>
               </div>
             );
           })}
           {dragCode && (
-            <div
-              className="flex items-center justify-center w-14 h-20 rounded-lg border-2 border-dashed border-gold-400/60 text-[10px] text-gold-300 text-center px-1 animate-pulse"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => dropOnGroup(null)}
-            >
+            <div className="shrink-0 w-14 h-20 rounded-lg border-2 border-dashed border-[#F4C542]/60 text-[9px] text-[#F4C542] flex items-center justify-center text-center animate-pulse" onDragOver={(e) => e.preventDefault()} onDrop={() => dropOnGroup(null)}>
               + New group
             </div>
           )}
         </div>
 
-        <div className="flex justify-center mb-3 short:hidden">
-          <div className="rounded-full border border-white/10 bg-black/50 px-4 py-1 text-xs text-white/60">
-            {hand.length} {hand.length === 1 ? "Card" : "Cards"}
+        <div className="gt-actions">
+          <div className="gt-stat">
+            <span className="gt-stat-box">{chipsLabel}</span>
+            <span className="gt-stat-box">Total {me?.deal_points ?? 0}</span>
+            {selected.size > 0 && (
+              <button type="button" className="gt-icon-btn" onClick={ungroupSelected} aria-label="Ungroup"><Minus size={14} /></button>
+            )}
+            {selected.size >= 2 && (
+              <button type="button" className="gt-icon-btn" onClick={groupSelected} aria-label="Group"><Plus size={14} /></button>
+            )}
           </div>
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-2 mb-3 short:mb-1 short:gap-1">
-          {selected.size >= 2 && (
-            <button className="btn-ghost flex items-center gap-1.5 short:px-2 short:py-1 short:text-xs" onClick={groupSelected}>
-              <Layers3 size={15} className="text-purple-400" />
-              Group
-            </button>
-          )}
-          <button className="btn-ghost flex items-center gap-1.5 short:px-2 short:py-1 short:text-xs" disabled={hand.length === 0} onClick={doSort}>
-            <Shuffle size={15} />
-            Sort
-          </button>
-          <button className="btn-ghost flex items-center gap-1.5 short:px-2 short:py-1 short:text-xs" disabled={hand.length === 0} onClick={doAutoSort}>
-            <Sparkles size={15} className="text-gold-400" />
-            Auto Sort
-          </button>
-          <button className="btn-ghost flex items-center gap-1.5 short:px-2 short:py-1 short:text-xs" onClick={resetGroups}>
-            <RotateCcw size={15} />
-            Reset
-          </button>
-        </div>
-
-        <div className="flex justify-between items-center flex-wrap gap-2">
-          {me && (
-            <div className="flex items-center gap-2 text-sm short:hidden">
-              <div className="relative w-10 h-10 shrink-0">
-                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-ink-700 to-ink-900 border-2 border-gold-500 flex items-center justify-center font-display font-bold">
-                  {me.name.slice(0, 2).toUpperCase()}
-                </div>
-                {myTurn && secondsLeft !== null && (
-                  <TurnRing seconds={secondsLeft} total={table?.turn_seconds ?? 30} size={40} />
-                )}
-              </div>
-              <span className="text-slate-100 font-medium">{me.name}</span>
-              <span className="text-gold-400">{me.chips} chips</span>
-              <span className="text-slate-400">score: {me.deal_points}</span>
-              {state?.pool_limit != null && (
-                <span className={`font-mono ${me.eliminated ? "text-red-400" : "text-slate-500"}`}>
-                  pool: {me.total_score}/{state.pool_limit}
-                  {me.eliminated ? " (OUT)" : ""}
-                </span>
-              )}
-            </div>
-          )}
-          <div className="flex gap-2 short:gap-1.5 short:w-full short:justify-between">
+          <div className="flex items-center gap-1.5 shrink-0">
             {canDiscard && (
-              <button className="btn-ghost rounded-full px-4 short:px-2 short:text-xs flex items-center gap-1.5" onClick={doDiscard}>
-                <Trash2 size={15} />
-                Discard
+              <button type="button" className="gt-btn-discard inline-flex items-center justify-center gap-1" onClick={doDiscard}>
+                <Trash2 size={13} /> Discard
               </button>
             )}
             {canDrop && (
-              <button className="btn-danger rounded-full px-4 short:px-2 short:text-xs flex items-center gap-1.5" onClick={() => send({ action: "drop" })}>
-                <Flag size={15} />
-                Drop {dropCost}
+              <button type="button" className="gt-btn-drop inline-flex items-center justify-center gap-1" onClick={() => send({ action: "drop" })}>
+                <Flag size={13} /> Drop {dropCost}
               </button>
             )}
             {canDeclare && (
-              <button className="btn-gold rounded-full px-5 short:px-3 short:text-xs flex items-center gap-1.5" onClick={doDeclare}>
-                <Trophy size={15} />
-                Declare
+              <button type="button" className="gt-btn-declare inline-flex items-center justify-center gap-1" onClick={doDeclare}>
+                <Trophy size={13} /> Declare
               </button>
             )}
           </div>
         </div>
-        <div className="mt-3 short:hidden flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-2.5 text-xs text-white/60">
-          <span className="text-base shrink-0">💡</span>
-          <span>
-            Drag a card onto another group (or the Finish Slot) to move it, or select 2+ cards and
-            "Group" — use ◀ ▶ to fine-tune, then select one card and tap the Finish Slot before Declare.
-          </span>
-        </div>
       </footer>
+
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
+      {leaveConfirmOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="card-surface w-full max-w-sm p-6 text-center">
+            <h2 className="font-display text-lg font-bold text-gold-400 mb-3">Leave Table</h2>
+            <p className="text-sm text-slate-300 mb-6">Are you sure you want to leave the table?</p>
+            <div className="flex gap-3">
+              <button className="btn-ghost rounded-full px-4 py-2 flex-1" onClick={() => setLeaveConfirmOpen(false)}>No</button>
+              <button className="btn-danger rounded-full px-4 py-2 flex-1" onClick={() => navigate("/lobby")}>Yes</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {lastError && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full border border-red-800 bg-black/90 px-6 py-3 text-sm text-red-300 shadow-2xl backdrop-blur-xl">⚠ {lastError}</div>}
     </div>
   );
 }
